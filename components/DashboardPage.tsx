@@ -706,6 +706,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                     Rp {kasCadangan.toLocaleString('id-ID')}
                   </p>
               </div>
+              <div className="bg-purple-500/10 p-4 rounded-lg">
+                  <p className="text-sm text-purple-400 font-semibold">Total Pelanggan</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white">
+                    {customers.length}
+                  </p>
+              </div>
           </div>
 
           {/* New Recharts Composed Chart with Stacked Bars */}
