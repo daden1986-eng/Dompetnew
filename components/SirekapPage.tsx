@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
@@ -77,6 +78,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
   // State for filtering and visibility
   const [searchTerm, setSearchTerm] = useState('');
   const [filterJenisLangganan, setFilterJenisLangganan] = useState('Semua');
+  const [filterStatus, setFilterStatus] = useState('Semua'); // New state for status filter
   const [isListVisible, setIsListVisible] = useState(true);
 
   // State for finance history filtering
@@ -493,7 +495,8 @@ ${companyInfo.name}`
   const filteredCustomers = customers.filter(customer => {
     const matchesSearchTerm = customer.nama.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesJenisLangganan = filterJenisLangganan === 'Semua' || customer.jenisLangganan === filterJenisLangganan;
-    return matchesSearchTerm && matchesJenisLangganan;
+    const matchesStatus = filterStatus === 'Semua' || customer.status === filterStatus;
+    return matchesSearchTerm && matchesJenisLangganan && matchesStatus;
   });
   
   const filteredFinanceHistory = financeHistory.filter(entry => {
@@ -533,12 +536,12 @@ ${companyInfo.name}`
     
     return (
       <div className="space-y-4 md:hidden">
-      {filteredCustomers.map((customer) => {
+      {filteredCustomers.map((customer, index) => {
         const totalTagihan = Number(customer.harga) + customer.tunggakan;
         return (
           <div key={customer.id} className="bg-white/5 p-4 rounded-lg shadow">
             <div className="flex justify-between items-start">
-              <span className="font-bold text-lg text-white">{customer.nama}</span>
+              <span className="font-bold text-lg text-white">#{index + 1}. {customer.nama}</span>
               <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                   customer.status === 'Lunas' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'
               }`}>
@@ -604,6 +607,7 @@ ${companyInfo.name}`
         <table className="min-w-full text-sm text-left text-gray-300">
           <thead className="text-xs text-white uppercase bg-white/10">
             <tr>
+              <th scope="col" className="px-6 py-3">No.</th>
               <th scope="col" className="px-6 py-3">Nama Pelanggan</th>
               <th scope="col" className="px-6 py-3">Status</th>
               <th scope="col" className="px-6 py-3 text-right">Harga (Rp)</th>
@@ -613,10 +617,11 @@ ${companyInfo.name}`
             </tr>
           </thead>
           <tbody>
-            {filteredCustomers.map((customer) => {
+            {filteredCustomers.map((customer, index) => {
               const totalTagihan = Number(customer.harga) + customer.tunggakan;
               return (
               <tr key={customer.id} className="border-b border-gray-700 hover:bg-white/5">
+                <td className="px-6 py-4">{index + 1}</td>
                 <th scope="row" className="px-6 py-4 font-medium text-white whitespace-nowrap">{customer.nama}</th>
                  <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
@@ -949,9 +954,9 @@ ${companyInfo.name}`
                 />
               </div>
               <div className="w-full sm:w-auto">
-                <label htmlFor="customerFilter" className="block text-sm font-medium text-gray-400 mb-1">Jenis</label>
+                <label htmlFor="customerFilterJenis" className="block text-sm font-medium text-gray-400 mb-1">Jenis Langganan</label>
                 <select
-                  id="customerFilter"
+                  id="customerFilterJenis"
                   value={filterJenisLangganan}
                   onChange={(e) => setFilterJenisLangganan(e.target.value)}
                   className="w-full pl-3 pr-8 py-2 text-white bg-gray-800/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
@@ -961,6 +966,19 @@ ${companyInfo.name}`
                   <option value="Static" className="bg-gray-800">Static</option>
                   <option value="Hotspot" className="bg-gray-800">Hotspot</option>
                   <option value="Mitra Voucher" className="bg-gray-800">Mitra Voucher</option>
+                </select>
+              </div>
+              <div className="w-full sm:w-auto">
+                <label htmlFor="customerFilterStatus" className="block text-sm font-medium text-gray-400 mb-1">Status Pembayaran</label>
+                <select
+                  id="customerFilterStatus"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full pl-3 pr-8 py-2 text-white bg-gray-800/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                >
+                  <option value="Semua" className="bg-gray-800">Semua Status</option>
+                  <option value="Lunas" className="bg-gray-800">Lunas</option>
+                  <option value="Belum Lunas" className="bg-gray-800">Belum Lunas</option>
                 </select>
               </div>
               <div className="flex gap-2 w-full sm:w-auto">
