@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
 import LaporanBulananPage from './LaporanBulananPage';
@@ -560,12 +559,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   };
 
   const renderFinancialVisualisation = () => {
-    if (financeHistory.length === 0) {
+    if (financeHistory.length === 0 && customers.length === 0) { // Check both finance and customers
       const capitalizedUsername = username.charAt(0).toUpperCase() + username.slice(1);
       return (
         <div className="text-center text-gray-400">
           <p className="text-3xl">Selamat Datang, {capitalizedUsername}!</p>
-          <p className="mt-4 text-gray-300 text-lg">Belum ada data keuangan untuk ditampilkan.</p>
+          <p className="mt-4 text-gray-300 text-lg">Belum ada data keuangan atau pelanggan untuk ditampilkan.</p>
         </div>
       );
     }
@@ -590,6 +589,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     const pengeluaranTransfer = pengeluaranEntries
       .filter(e => e.metode === 'Transfer')
       .reduce((acc, e) => acc + e.nominal, 0);
+
+    // New customer counts
+    const totalActiveCustomers = customers.length;
+    const totalPaidCustomers = customers.filter(c => c.status === 'Lunas').length;
+    const totalUnpaidCustomers = customers.filter(c => c.status === 'Belum Lunas').length;
     
     // --- New Categorized Data Processing ---
 
@@ -675,7 +679,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
 
     return (
        <div className="bg-black/20 rounded-lg p-4 sm:p-8 w-full flex-grow">
-          <h2 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">Ringkasan Keuangan</h2>
+          <h2 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">Ringkasan Keuangan & Pelanggan</h2>
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
               <div className="bg-green-500/10 p-4 rounded-lg">
@@ -709,7 +713,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
               <div className="bg-purple-500/10 p-4 rounded-lg">
                   <p className="text-sm text-purple-400 font-semibold">Total Pelanggan</p>
                   <p className="text-xl sm:text-2xl font-bold text-white">
-                    {customers.length}
+                    {totalActiveCustomers}
+                  </p>
+              </div>
+              <div className="bg-teal-500/10 p-4 rounded-lg">
+                  <p className="text-sm text-teal-400 font-semibold">Pelanggan Lunas</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white">
+                    {totalPaidCustomers}
+                  </p>
+              </div>
+              <div className="bg-amber-500/10 p-4 rounded-lg">
+                  <p className="text-sm text-amber-400 font-semibold">Pelanggan Belum Lunas</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white">
+                    {totalUnpaidCustomers}
                   </p>
               </div>
           </div>
