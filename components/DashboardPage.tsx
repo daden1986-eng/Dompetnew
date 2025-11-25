@@ -32,6 +32,7 @@ interface Customer {
   harga: string;
   status: 'Lunas' | 'Belum Lunas';
   tunggakan: number;
+  dueDate: string; // Added dueDate
 }
 
 interface FinanceEntry {
@@ -538,7 +539,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             description: `Tagihan Internet - ${customer.jenisLangganan}`,
             qty: 1,
             price: Number(customer.harga)
-        }]
+        }],
+        invoiceDueDate: customer.dueDate, // Pass the customer's due date
     });
     setActivePage('invoice');
   };
@@ -636,7 +638,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     });
 
     let cumulativeBalance = 0;
-    const allCategories = [...allIncomeCategories, ...allExpenseCategories];
+    const allCategories = [...Array.from(allIncomeCategories), ...Array.from(allExpenseCategories)];
 
     const chartData = Object.keys(dailyDataCategorized)
         .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())

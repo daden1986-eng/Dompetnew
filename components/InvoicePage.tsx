@@ -28,6 +28,7 @@ export interface InvoiceInitialData {
     recipient: string;
     recipientPhone: string;
     items: InvoiceItem[];
+    invoiceDueDate?: string; // Added invoiceDueDate
 }
 
 interface InvoicePageProps {
@@ -44,6 +45,15 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
     const [items, setItems] = useState<InvoiceItem[]>([
         { id: 1, description: '', qty: 1, price: 0 }
     ]);
+    const [invoiceDueDate, setInvoiceDueDate] = useState<string>(() => {
+        // Default to 25th of current/next month
+        const today = new Date();
+        let defaultDate = new Date(today.getFullYear(), today.getMonth(), 25);
+        if (today.getDate() > 25) {
+            defaultDate.setMonth(defaultDate.getMonth() + 1);
+        }
+        return defaultDate.toISOString().split('T')[0];
+    });
     
     // Load draft from localStorage on initial render OR use initialData
     useEffect(() => {
@@ -51,6 +61,9 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
             setRecipient(initialData.recipient);
             setRecipientPhone(initialData.recipientPhone);
             setItems(initialData.items);
+            if (initialData.invoiceDueDate) {
+                setInvoiceDueDate(initialData.invoiceDueDate);
+            }
         } else {
             try {
                 const savedDraft = localStorage.getItem(DRAFT_KEY);
@@ -61,6 +74,9 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
                     if (draft.items && draft.items.length > 0) {
                         setItems(draft.items);
                     }
+                    if (draft.invoiceDueDate) {
+                        setInvoiceDueDate(draft.invoiceDueDate);
+                    }
                 }
             } catch (error) {
                 console.error("Gagal memuat draf invoice, memulai dengan formulir kosong.", error);
@@ -70,21 +86,20 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
 
     // Save draft to localStorage whenever it changes
     useEffect(() => {
-        // Don't overwrite draft immediately if we just loaded initialData, 
-        // but as soon as user edits, it updates the draft which is fine.
         const draft = {
             recipient,
             recipientPhone,
-            items
+            items,
+            invoiceDueDate, // Include invoiceDueDate in draft
         };
         // Only save if there's something meaningful to save
-        if (recipient || recipientPhone || items.some(item => item.description || item.price > 0)) {
+        if (recipient || recipientPhone || items.some(item => item.description || item.price > 0) || invoiceDueDate) {
             localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
         } else {
             // If the form is completely empty, remove the draft to keep storage clean
             localStorage.removeItem(DRAFT_KEY);
         }
-    }, [recipient, recipientPhone, items]);
+    }, [recipient, recipientPhone, items, invoiceDueDate]);
 
     const handleItemChange = (index: number, field: keyof Omit<InvoiceItem, 'id'>, value: string | number) => {
         const newItems = [...items];
@@ -130,6 +145,12 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
                 setRecipient('');
                 setRecipientPhone('');
                 setItems([{ id: Date.now(), description: '', qty: 1, price: 0 }]);
+                const today = new Date();
+                let defaultDate = new Date(today.getFullYear(), today.getMonth(), 25);
+                if (today.getDate() > 25) {
+                    defaultDate.setMonth(defaultDate.getMonth() + 1);
+                }
+                setInvoiceDueDate(defaultDate.toISOString().split('T')[0]); // Reset to default
                 localStorage.removeItem(DRAFT_KEY);
             }
         });
@@ -143,6 +164,7 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
         formattedPhone = formattedPhone.replace(/\D/g, '');
 
         const grandTotal = calculateGrandTotal();
+        const dueDateFormatted = new Date(invoiceDueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
         const message = encodeURIComponent(
 `*Invoice Pemberitahuan*
@@ -152,6 +174,7 @@ Yth. Bpk/Ibu ${recipient},
 Dengan hormat, kami sampaikan rincian tagihan Anda sebagai berikut:
 
 *Total Tagihan: Rp ${grandTotal.toLocaleString('id-ID')}*
+*Jatuh Tempo: ${dueDateFormatted}*
 
 Invoice resmi dalam format PDF juga telah kami siapkan. Mohon konfirmasi jika Anda memerlukan salinan PDF untuk pencatatan Anda.
 
@@ -195,9 +218,9 @@ Hormat kami,
         const invoiceNumber = `INV-${Date.now()}`;
         const today = new Date();
         const todayString = today.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
-        const dueDate = new Date(today);
-        dueDate.setDate(today.getDate() + 7); // Due in 7 days
-        const dueDateString = dueDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        
+        // Use the invoiceDueDate from state
+        const displayDueDate = new Date(invoiceDueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
         
         let startY = 55;
 
@@ -222,7 +245,7 @@ Hormat kami,
         doc.setFont('helvetica', 'normal');
         doc.text(invoiceNumber, rightColX2, startY, { align: 'right' });
         doc.text(todayString, rightColX2, startY + 5, { align: 'right' });
-        doc.text(dueDateString, rightColX2, startY + 10, { align: 'right' });
+        doc.text(displayDueDate, rightColX2, startY + 10, { align: 'right' }); // Use the invoiceDueDate state
 
         // === ITEMS TABLE ===
         const tableData = items.map(item => [
@@ -326,8 +349,8 @@ Hormat kami,
 
                 <div className="space-y-6">
                     {/* Recipient */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="md:col-span-1">
                             <label htmlFor="recipient" className="block text-sm font-medium text-gray-300 mb-1">Kepada</label>
                             <input
                                 type="text"
@@ -338,7 +361,7 @@ Hormat kami,
                                 placeholder="Nama pelanggan atau perusahaan"
                             />
                         </div>
-                        <div>
+                        <div className="md:col-span-1">
                             <label htmlFor="recipientPhone" className="block text-sm font-medium text-gray-300 mb-1">No. WhatsApp</label>
                             <input
                                 type="tel"
@@ -347,6 +370,16 @@ Hormat kami,
                                 onChange={(e) => setRecipientPhone(e.target.value)}
                                 className="w-full input-style"
                                 placeholder="Nomor WhatsApp penerima"
+                            />
+                        </div>
+                        <div className="md:col-span-1">
+                            <label htmlFor="invoiceDueDate" className="block text-sm font-medium text-gray-300 mb-1">Tanggal Jatuh Tempo</label>
+                            <input
+                                type="date"
+                                id="invoiceDueDate"
+                                value={invoiceDueDate}
+                                onChange={(e) => setInvoiceDueDate(e.target.value)}
+                                className="w-full input-style"
                             />
                         </div>
                     </div>

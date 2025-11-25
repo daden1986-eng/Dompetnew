@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
@@ -18,6 +17,7 @@ interface Customer {
   harga: string;
   status: 'Lunas' | 'Belum Lunas';
   tunggakan: number;
+  dueDate: string; // Added dueDate: YYYY-MM-DD
 }
 
 interface FinanceEntry {
@@ -128,6 +128,12 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         }
       });
     } else {
+      const today = new Date();
+      let dueDate = new Date(today.getFullYear(), today.getMonth(), 25);
+      if (today.getDate() > 25) {
+          dueDate.setMonth(dueDate.getMonth() + 1);
+      }
+
       const newCustomer: Customer = {
         id: Date.now(),
         nama,
@@ -137,6 +143,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         harga: harga || '0',
         status: 'Belum Lunas',
         tunggakan: 0,
+        dueDate: dueDate.toISOString().split('T')[0], // Initial due date: 25th of current/next month
       };
       setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
       onNewCustomer(newCustomer);
@@ -299,11 +306,21 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         };
         setFinanceHistory(prevHistory => [...prevHistory, newPaymentEntry]);
 
-        const updatedCustomers = customers.map(c =>
-          c.id === customer.id
-            ? { ...c, status: 'Lunas', tunggakan: 0 }
-            : c
-        );
+        const updatedCustomers = customers.map(c => {
+          if (c.id === customer.id) {
+            // Set next due date to 25th of the NEXT month after successful payment
+            const nextDueDate = new Date();
+            nextDueDate.setMonth(nextDueDate.getMonth() + 1);
+            nextDueDate.setDate(25);
+            return { 
+                ...c, 
+                status: 'Lunas', 
+                tunggakan: 0, 
+                dueDate: nextDueDate.toISOString().split('T')[0] 
+            };
+          }
+          return c;
+        });
         setCustomers(updatedCustomers);
         onPaymentSuccess(customer, totalTagihan);
 
@@ -355,28 +372,41 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
 
     Swal.fire({
       title: 'Mulai Siklus Tagihan Baru?',
-      text: "Pelanggan yang belum lunas akan diakumulasikan tunggakannya. Lanjutkan?",
+      text: "Pelanggan yang belum lunas akan diakumulasikan tunggakannya dan semua status direset ke 'Belum Lunas'. Tanggal jatuh tempo akan diperbarui ke tanggal 25 bulan berikutnya. Lanjutkan?",
       icon: 'question',
       showCancelButton: true,
       confirmButtonColor: '#3085d6',
       cancelButtonColor: '#d33',
       confirmButtonText: 'Ya, mulai!',
-      cancelButtonText: 'Batal'
+      cancelButtonText: 'Batal',
+      customClass: {
+        popup: '!bg-gray-800 !text-white !rounded-lg',
+        title: '!text-white',
+        htmlContainer: '!text-gray-300',
+        confirmButton: '!bg-blue-600 hover:!bg-blue-700',
+        cancelButton: '!bg-gray-600 hover:!bg-gray-700',
+      },
     }).then((result: any) => {
       if (result.isConfirmed) {
         const updatedCustomers = customers.map(c => {
             const newTunggakan = c.status === 'Belum Lunas' ? c.tunggakan + Number(c.harga) : c.tunggakan;
+            
+            // Calculate next dueDate: 25th of the next month
+            const today = new Date();
+            let nextDueDate = new Date(today.getFullYear(), today.getMonth() + 1, 25); // Always next month's 25th
+
             return {
                 ...c,
                 // FIX: Use 'as const' to ensure TypeScript infers the literal type 'Belum Lunas' instead of 'string'.
                 status: 'Belum Lunas' as const,
                 tunggakan: newTunggakan,
+                dueDate: nextDueDate.toISOString().split('T')[0], // Advance to next month's 25th
             };
         });
         setCustomers(updatedCustomers);
         Swal.fire(
           'Berhasil!',
-          'Siklus tagihan baru telah dimulai. Semua status pelanggan direset menjadi "Belum Lunas".',
+          'Siklus tagihan baru telah dimulai. Semua status pelanggan direset menjadi "Belum Lunas" dan tanggal jatuh tempo diperbarui.',
           'success'
         );
       }
@@ -401,6 +431,8 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
 *Atas Nama:* ${companyInfo.atasNama}`;
     }
 
+    const dueDateFormatted = new Date(customer.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+
     const message = encodeURIComponent(
 `*Pemberitahuan Tagihan Internet*
 
@@ -411,6 +443,7 @@ Kami ingin mengingatkan mengenai tagihan layanan internet Anda untuk periode ini
 Rincian Tagihan:
 - Jenis Langganan: ${customer.jenisLangganan}
 - Total Tagihan: *Rp ${totalTagihan.toLocaleString('id-ID')}*
+- Jatuh Tempo: *${dueDateFormatted}*
 
 ${paymentInfo}
 
@@ -538,6 +571,9 @@ ${companyInfo.name}`
       <div className="space-y-4 md:hidden">
       {filteredCustomers.map((customer, index) => {
         const totalTagihan = Number(customer.harga) + customer.tunggakan;
+        const dueDateFormatted = new Date(customer.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+        const isOverdue = customer.status === 'Belum Lunas' && new Date(customer.dueDate) < new Date(new Date().setHours(0,0,0,0));
+
         return (
           <div key={customer.id} className="bg-white/5 p-4 rounded-lg shadow">
             <div className="flex justify-between items-start">
@@ -549,9 +585,16 @@ ${companyInfo.name}`
               </span>
             </div>
             <div className="mt-4 space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-gray-400">Jenis Langganan</span><span>{customer.jenisLangganan}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Harga</span><span>Rp {Number(customer.harga).toLocaleString('id-ID')}</span></div>
               <div className="flex justify-between"><span className="text-gray-400">Tunggakan</span><span>Rp {customer.tunggakan.toLocaleString('id-ID')}</span></div>
               <div className="flex justify-between font-bold text-base"><span className="text-gray-300">Total Tagihan</span><span>Rp {totalTagihan.toLocaleString('id-ID')}</span></div>
+              <div className="flex justify-between">
+                  <span className="text-gray-400">Jatuh Tempo</span>
+                  <span className={isOverdue ? 'text-red-400 font-semibold' : 'text-white'}>
+                      {dueDateFormatted} {isOverdue && '(Terlambat)'}
+                  </span>
+              </div>
             </div>
             <div className="mt-4 pt-3 border-t border-gray-700 flex justify-between items-center gap-2">
               <div className="flex-1 flex gap-2">
@@ -609,20 +652,26 @@ ${companyInfo.name}`
             <tr>
               <th scope="col" className="px-6 py-3">No.</th>
               <th scope="col" className="px-6 py-3">Nama Pelanggan</th>
+              <th scope="col" className="px-6 py-3">Jenis Langganan</th>
               <th scope="col" className="px-6 py-3">Status</th>
               <th scope="col" className="px-6 py-3 text-right">Harga (Rp)</th>
               <th scope="col" className="px-6 py-3 text-right">Tunggakan (Rp)</th>
               <th scope="col" className="px-6 py-3 text-right">Total Tagihan (Rp)</th>
+              <th scope="col" className="px-6 py-3 text-right">Jatuh Tempo</th>
               <th scope="col" className="px-6 py-3 text-center">Aksi</th>
             </tr>
           </thead>
           <tbody>
             {filteredCustomers.map((customer, index) => {
               const totalTagihan = Number(customer.harga) + customer.tunggakan;
+              const dueDateFormatted = new Date(customer.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+              const isOverdue = customer.status === 'Belum Lunas' && new Date(customer.dueDate) < new Date(new Date().setHours(0,0,0,0));
+
               return (
               <tr key={customer.id} className="border-b border-gray-700 hover:bg-white/5">
                 <td className="px-6 py-4">{index + 1}</td>
                 <th scope="row" className="px-6 py-4 font-medium text-white whitespace-nowrap">{customer.nama}</th>
+                <td className="px-6 py-4">{customer.jenisLangganan}</td>
                  <td className="px-6 py-4">
                   <div className="flex items-center gap-2">
                     <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
@@ -644,6 +693,9 @@ ${companyInfo.name}`
                 <td className="px-6 py-4 text-right">{Number(customer.harga).toLocaleString('id-ID')}</td>
                 <td className="px-6 py-4 text-right">{customer.tunggakan.toLocaleString('id-ID')}</td>
                 <td className="px-6 py-4 text-right font-bold">{totalTagihan.toLocaleString('id-ID')}</td>
+                <td className={`px-6 py-4 text-right ${isOverdue ? 'text-red-400 font-semibold' : 'text-white'}`}>
+                  {dueDateFormatted}
+                </td>
                 <td className="px-6 py-4 text-center space-x-2">
                     <button 
                         onClick={() => handlePayment(customer)} 
