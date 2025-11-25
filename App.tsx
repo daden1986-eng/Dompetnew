@@ -15,6 +15,8 @@ const defaultCompanyInfo: CompanyInfo = {
     namaBank: '',
     nomorRekening: '',
     atasNama: '',
+    googleDriveClientId: '',
+    googleDriveApiKey: '',
 };
 
 
@@ -61,7 +63,10 @@ function App() {
           setCompanyInfo={setCompanyInfo}
         />
       ) : (
-        <LoginPage onLoginSuccess={handleLoginSuccess} />
+        <LoginPage 
+          onLoginSuccess={handleLoginSuccess} 
+          googleClientId={companyInfo.googleDriveClientId}
+        />
       )}
       <footer className="fixed bottom-0 left-0 right-0 p-4 text-center text-gray-400 text-sm bg-gray-900/50 backdrop-blur-sm z-50">
         Hak Cipta © {new Date().getFullYear()} {companyInfo.name}. Seluruh hak cipta dilindungi.

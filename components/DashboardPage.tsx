@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
 import LaporanBulananPage from './LaporanBulananPage';
@@ -10,6 +11,8 @@ import SettingsIcon from './icons/SettingsIcon';
 
 // Declare Swal to inform TypeScript about the global variable from the CDN script
 declare const Swal: any;
+declare const gapi: any;
+declare const google: any;
 
 // Destructure components from the Recharts namespace
 const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line } = Recharts;
@@ -54,6 +57,8 @@ export interface CompanyInfo {
     namaBank: string;
     nomorRekening: string;
     atasNama: string;
+    googleDriveClientId?: string; // Optional for Google Drive Sync
+    googleDriveApiKey?: string; // Optional for Google Drive Sync
 }
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
@@ -137,6 +142,215 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     const totalPengeluaran = financeHistory.filter(e => e.kategori === 'Pengeluaran').reduce((acc, e) => acc + e.nominal, 0);
     return totalPemasukan - totalPengeluaran;
   }, [financeHistory]);
+
+  // --- START GOOGLE DRIVE SYNC LOGIC ---
+  const DRIVE_FILE_NAME = 'sidompet_app_data_backup.json';
+  const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+  const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+  const initGapiClient = async () => {
+    if (!companyInfo.googleDriveApiKey) {
+        throw new Error('API Key Google Drive belum dikonfigurasi.');
+    }
+    await gapi.client.init({
+      apiKey: companyInfo.googleDriveApiKey,
+      discoveryDocs: [DISCOVERY_DOC],
+    });
+  };
+
+  const handleDriveAuth = (callback: (tokenResponse: any) => void) => {
+    if (!companyInfo.googleDriveClientId) {
+       Swal.fire('Konfigurasi Kurang', 'Client ID Google Drive belum diatur di pengaturan.', 'error');
+       return;
+    }
+
+    const tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: companyInfo.googleDriveClientId,
+      scope: SCOPES,
+      callback: callback,
+    });
+    tokenClient.requestAccessToken();
+  };
+
+  const handleBackupToDrive = async () => {
+    if (!companyInfo.googleDriveClientId || !companyInfo.googleDriveApiKey) {
+        Swal.fire('Error', 'Harap lengkapi konfigurasi Google Drive (Client ID & API Key) di pengaturan.', 'error');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Menghubungkan ke Google...',
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    try {
+        await new Promise((resolve) => gapi.load('client', resolve));
+        await initGapiClient();
+
+        Swal.close(); // Close loading, prompt auth
+        
+        handleDriveAuth(async (tokenResponse: any) => {
+            if (tokenResponse && tokenResponse.access_token) {
+                Swal.fire({
+                    title: 'Mengunggah Backup...',
+                    text: 'Sedang menyimpan data ke Google Drive...',
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                try {
+                    // 1. Prepare Data
+                    const backupData = {
+                        companyInfo,
+                        customers,
+                        financeHistory,
+                        kasCadangan,
+                        profitSharingData
+                    };
+                    const fileContent = JSON.stringify(backupData, null, 2);
+                    const file = new Blob([fileContent], { type: 'application/json' });
+                    const metadata = {
+                        name: DRIVE_FILE_NAME,
+                        mimeType: 'application/json',
+                    };
+
+                    // 2. Check if file exists
+                    const response = await gapi.client.drive.files.list({
+                        q: `name = '${DRIVE_FILE_NAME}' and trashed = false`,
+                        fields: 'files(id, name)',
+                    });
+                    
+                    const files = response.result.files;
+
+                    if (files && files.length > 0) {
+                        // Update existing file
+                        const fileId = files[0].id;
+                        const updateUrl = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
+                        
+                        await fetch(updateUrl, {
+                            method: 'PATCH',
+                            headers: {
+                                Authorization: `Bearer ${tokenResponse.access_token}`,
+                                'Content-Type': 'application/json',
+                            },
+                            body: fileContent,
+                        });
+                        
+                        Swal.fire('Sukses', 'Data berhasil diperbarui di Google Drive!', 'success');
+                    } else {
+                        // Create new file
+                        const accessToken = tokenResponse.access_token;
+                        const form = new FormData();
+                        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+                        form.append('file', file);
+
+                        await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                            method: 'POST',
+                            headers: {
+                                Authorization: `Bearer ${accessToken}`,
+                            },
+                            body: form,
+                        });
+                        
+                        Swal.fire('Sukses', 'File backup baru berhasil dibuat di Google Drive!', 'success');
+                    }
+
+                } catch (err: any) {
+                    console.error(err);
+                    Swal.fire('Gagal', `Terjadi kesalahan saat upload: ${err.message || JSON.stringify(err)}`, 'error');
+                }
+            }
+        });
+
+    } catch (err: any) {
+        console.error(err);
+        Swal.fire('Gagal', `Inisialisasi GAPI gagal: ${err.message}`, 'error');
+    }
+  };
+
+  const handleRestoreFromDrive = async () => {
+    if (!companyInfo.googleDriveClientId || !companyInfo.googleDriveApiKey) {
+        Swal.fire('Error', 'Harap lengkapi konfigurasi Google Drive (Client ID & API Key) di pengaturan.', 'error');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Menghubungkan ke Google...',
+        didOpen: () => { Swal.showLoading(); }
+    });
+
+    try {
+        await new Promise((resolve) => gapi.load('client', resolve));
+        await initGapiClient();
+
+        Swal.close();
+
+        handleDriveAuth(async (tokenResponse: any) => {
+            if (tokenResponse && tokenResponse.access_token) {
+                 Swal.fire({
+                    title: 'Mencari Backup...',
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                try {
+                    // 1. Find File
+                    const response = await gapi.client.drive.files.list({
+                        q: `name = '${DRIVE_FILE_NAME}' and trashed = false`,
+                        fields: 'files(id, name)',
+                    });
+
+                    const files = response.result.files;
+
+                    if (files && files.length > 0) {
+                        const fileId = files[0].id;
+                        
+                        // 2. Download Content
+                        const fileResponse = await gapi.client.drive.files.get({
+                            fileId: fileId,
+                            alt: 'media',
+                        });
+
+                        const data = fileResponse.result; // This is the JSON object already parsed by gapi
+
+                        // 3. Confirm Restore
+                        Swal.fire({
+                            title: 'Backup Ditemukan',
+                            text: 'Apakah Anda yakin ingin menimpa data lokal dengan data dari Google Drive?',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#d33',
+                            confirmButtonText: 'Ya, Restore!',
+                            customClass: {
+                                popup: '!bg-gray-800 !text-white !rounded-lg',
+                                title: '!text-white',
+                                confirmButton: '!bg-red-600 hover:!bg-red-700',
+                                cancelButton: '!bg-gray-600 hover:!bg-gray-700',
+                            }
+                        }).then((result: any) => {
+                            if (result.isConfirmed) {
+                                if (data.companyInfo) setCompanyInfo(data.companyInfo);
+                                if (data.customers) setCustomers(data.customers);
+                                if (data.financeHistory) setFinanceHistory(data.financeHistory);
+                                if (data.kasCadangan) setKasCadangan(data.kasCadangan);
+                                if (data.profitSharingData) setProfitSharingData(data.profitSharingData);
+                                
+                                Swal.fire('Sukses', 'Data aplikasi berhasil dipulihkan dari Google Drive.', 'success');
+                            }
+                        });
+
+                    } else {
+                        Swal.fire('Tidak Ditemukan', 'Tidak ditemukan file backup "sidompet_app_data_backup.json" di Google Drive Anda.', 'info');
+                    }
+                } catch (err: any) {
+                    console.error(err);
+                     Swal.fire('Gagal', `Terjadi kesalahan saat mengunduh: ${err.message}`, 'error');
+                }
+            }
+        });
+    } catch (err: any) {
+         Swal.fire('Gagal', `Inisialisasi GAPI gagal: ${err.message}`, 'error');
+    }
+  };
+  // --- END GOOGLE DRIVE SYNC LOGIC ---
 
   // --- START NOTIFICATION LOGIC ---
   const generateBalanceSummary = (): string => {
@@ -307,6 +521,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                     if (parsedData.kasCadangan) {
                         setKasCadangan(parsedData.kasCadangan);
                     }
+                    if (parsedData.profitSharingData) {
+                        setProfitSharingData(parsedData.profitSharingData);
+                    }
                     
                     Swal.fire({
                         title: 'Restore Berhasil!',
@@ -389,19 +606,41 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             <input id="swal-tg-chatid" type="text" class="swal2-input w-full !bg-gray-700 !border-gray-600 !text-white" value="${companyInfo.telegramChatId || ''}" placeholder="ID grup atau pengguna untuk menerima notifikasi">
           </div>
 
+          <h3 class="text-lg font-semibold text-sky-400 border-b border-gray-600 pb-2 pt-4">Integrasi Google Drive</h3>
+          <div class="text-xs text-gray-400 mb-2">Dibutuhkan untuk fitur sinkronisasi cloud. Anda perlu membuat project di Google Cloud Console dan mengaktifkan Google Drive API.</div>
+          <div>
+            <label for="swal-gdrive-clientid" class="block text-sm font-medium mb-1">Client ID</label>
+            <input id="swal-gdrive-clientid" type="text" class="swal2-input w-full !bg-gray-700 !border-gray-600 !text-white" value="${companyInfo.googleDriveClientId || ''}" placeholder="cth: 123456789-abc.apps.googleusercontent.com">
+          </div>
+          <div>
+            <label for="swal-gdrive-apikey" class="block text-sm font-medium mb-1">API Key</label>
+            <input id="swal-gdrive-apikey" type="text" class="swal2-input w-full !bg-gray-700 !border-gray-600 !text-white" value="${companyInfo.googleDriveApiKey || ''}" placeholder="cth: AIzaSyA...">
+          </div>
+
           <h3 class="text-lg font-semibold text-sky-400 border-b border-gray-600 pb-2 pt-4">Backup & Restore</h3>
-          <div class="space-y-3">
+          <div class="space-y-4">
+             <div class="bg-blue-900/30 p-3 rounded border border-blue-800">
+                <label class="block text-sm font-medium mb-2 text-blue-300">Sinkronisasi Google Drive (Cloud)</label>
+                <div class="flex gap-2">
+                     <button id="swal-drive-backup" type="button" class="flex-1 py-2 px-3 rounded bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors">
+                        ☁️ Upload ke Drive
+                     </button>
+                     <button id="swal-drive-restore" type="button" class="flex-1 py-2 px-3 rounded bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium transition-colors">
+                        ⬇️ Restore dari Drive
+                     </button>
+                </div>
+             </div>
+
             <div>
-              <label class="block text-sm font-medium mb-2">Backup Data</label>
+              <label class="block text-sm font-medium mb-2">Backup Lokal (File)</label>
               <div class="flex flex-col sm:flex-row gap-2">
-                <button id="swal-backup-all" class="swal2-styled w-full !bg-green-600 hover:!bg-green-700">Backup Semua Pengaturan & Data</button>
-                <button id="swal-backup-data" class="swal2-styled w-full !bg-green-800 hover:!bg-green-900">Backup Data Pelanggan & Transaksi</button>
+                <button id="swal-backup-all" class="swal2-styled w-full !bg-green-600 hover:!bg-green-700 !m-0">Download Semua Data</button>
+                <button id="swal-backup-data" class="swal2-styled w-full !bg-green-800 hover:!bg-green-900 !m-0">Download Data Transaksi Saja</button>
               </div>
             </div>
             <div>
-              <label for="swal-restore-file" class="block text-sm font-medium mb-2">Restore Data dari File</label>
+              <label for="swal-restore-file" class="block text-sm font-medium mb-2">Restore Lokal (File)</label>
                <input id="swal-restore-file" type="file" accept=".json" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-yellow-500/20 file:text-yellow-300 hover:file:bg-yellow-600/30 cursor-pointer">
-               <p class="text-xs text-gray-500 mt-1">Pilih file backup (.json) untuk memulihkan data. Ini akan menimpa data yang ada.</p>
             </div>
           </div>
         </div>
@@ -440,6 +679,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
 
         const restoreInput = document.getElementById('swal-restore-file') as HTMLInputElement;
         if (restoreInput) restoreInput.onchange = (e) => handleRestore(e as any);
+
+        // Attach Google Drive Listeners
+        const driveBackupBtn = document.getElementById('swal-drive-backup');
+        if (driveBackupBtn) driveBackupBtn.onclick = handleBackupToDrive;
+
+        const driveRestoreBtn = document.getElementById('swal-drive-restore');
+        if (driveRestoreBtn) driveRestoreBtn.onclick = handleRestoreFromDrive;
       },
       preConfirm: () => {
         const name = (document.getElementById('swal-company-name') as HTMLInputElement).value;
@@ -450,28 +696,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         const namaBank = (document.getElementById('swal-bank-name') as HTMLInputElement).value;
         const nomorRekening = (document.getElementById('swal-account-number') as HTMLInputElement).value;
         const atasNama = (document.getElementById('swal-account-name') as HTMLInputElement).value;
+        const googleDriveClientId = (document.getElementById('swal-gdrive-clientid') as HTMLInputElement).value;
+        const googleDriveApiKey = (document.getElementById('swal-gdrive-apikey') as HTMLInputElement).value;
         const logoInput = document.getElementById('swal-company-logo') as HTMLInputElement;
         const logoFile = logoInput.files?.[0];
 
         return new Promise((resolve) => {
-          if (logoFile) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              resolve({
-                name,
-                address,
-                phone,
-                telegramBotToken,
-                telegramChatId,
-                namaBank,
-                nomorRekening,
-                atasNama,
-                logo: e.target?.result as string
-              });
-            };
-            reader.readAsDataURL(logoFile);
-          } else {
-            resolve({
+          const baseData = {
               name,
               address,
               phone,
@@ -480,6 +711,22 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
               namaBank,
               nomorRekening,
               atasNama,
+              googleDriveClientId,
+              googleDriveApiKey
+          };
+
+          if (logoFile) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              resolve({
+                ...baseData,
+                logo: e.target?.result as string
+              });
+            };
+            reader.readAsDataURL(logoFile);
+          } else {
+            resolve({
+              ...baseData,
               logo: companyInfo.logo // Keep old logo if no new one is selected
             });
           }
