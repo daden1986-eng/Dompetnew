@@ -15,8 +15,6 @@ const defaultCompanyInfo: CompanyInfo = {
     namaBank: '',
     nomorRekening: '',
     atasNama: '',
-    googleDriveClientId: '',
-    googleDriveApiKey: '',
 };
 
 
@@ -28,7 +26,11 @@ function App() {
         if (saved) {
             // Gabungkan data yang disimpan dengan default untuk menangani pembaruan skema dengan baik
             const parsed = JSON.parse(saved);
-            return { ...defaultCompanyInfo, ...parsed };
+            // Ensure defaults are used if saved values are empty (important for existing users)
+            return { 
+                ...defaultCompanyInfo, 
+                ...parsed,
+            };
         }
     } catch (error) {
         console.error("Gagal memuat info perusahaan dari localStorage, kembali ke default.", error);
@@ -65,7 +67,6 @@ function App() {
       ) : (
         <LoginPage 
           onLoginSuccess={handleLoginSuccess} 
-          googleClientId={companyInfo.googleDriveClientId}
         />
       )}
       <footer className="fixed bottom-0 left-0 right-0 p-4 text-center text-gray-400 text-sm bg-gray-900/50 backdrop-blur-sm z-50">
