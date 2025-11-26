@@ -33,6 +33,7 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
   onKasActivity
 }) => {
   const [tambahAmount, setTambahAmount] = useState('');
+  const [tambahDeskripsi, setTambahDeskripsi] = useState(''); // New state for description
   const [gunakanAmount, setGunakanAmount] = useState('');
 
   const handleTambahKas = (e: React.FormEvent<HTMLFormElement>) => {
@@ -47,9 +48,13 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
       return;
     }
     
+    // Construct description ensuring "Kas Cadangan" is present for filtering
+    const descriptionSuffix = tambahDeskripsi.trim() ? ` - ${tambahDeskripsi}` : '';
+    const finalDescription = `Transfer ke Kas Cadangan${descriptionSuffix}`;
+
     const newExpenseEntry: FinanceEntry = {
         id: Date.now(),
-        deskripsi: `Transfer ke Kas Cadangan`,
+        deskripsi: finalDescription,
         tanggal: new Date().toISOString().split('T')[0],
         kategori: 'Pengeluaran',
         metode: 'Internal',
@@ -61,6 +66,7 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
     
     Swal.fire({ title: 'Berhasil', text: `Rp ${amount.toLocaleString('id-ID')} berhasil ditambahkan ke kas cadangan.`, icon: 'success', customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' } });
     setTambahAmount('');
+    setTambahDeskripsi('');
   };
 
   const handleGunakanKas = (e: React.FormEvent<HTMLFormElement>) => {
@@ -126,6 +132,17 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
                     <h3 className="text-xl font-semibold mb-2">Tambah ke Kas Cadangan</h3>
                     <p className="text-sm text-gray-400 mb-4">Pindahkan dana dari Saldo Akhir. Akan dicatat sebagai <strong className="text-red-400">pengeluaran</strong>.</p>
                     <form onSubmit={handleTambahKas} className="space-y-4 flex-grow flex flex-col">
+                        <div>
+                            <label htmlFor="tambahDeskripsi" className="block text-sm font-medium text-gray-300 mb-1">Keterangan (Opsional)</label>
+                            <input
+                                type="text"
+                                id="tambahDeskripsi"
+                                value={tambahDeskripsi}
+                                onChange={(e) => setTambahDeskripsi(e.target.value)}
+                                className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
+                                placeholder="Contoh: Sisa Anggaran Bulan Ini"
+                            />
+                        </div>
                         <div className="flex-grow">
                             <label htmlFor="tambahAmount" className="block text-sm font-medium text-gray-300 mb-1">Jumlah (Rp)</label>
                             <input
