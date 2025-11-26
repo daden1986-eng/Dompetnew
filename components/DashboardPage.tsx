@@ -3,11 +3,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
 import LaporanBulananPage from './LaporanBulananPage';
 import InvoicePage, { InvoiceInitialData } from './InvoicePage';
-import KasCadanganPage from './KasCadanganPage'; // Import the new component
+import KasCadanganPage from './KasCadanganPage';
+import VoucherPage from './VoucherPage'; // Import VoucherPage
 // FIX: Import ProfitShare to break circular dependency
 import { ProfitShare } from './LaporanBulananPage';
 import * as Recharts from 'recharts';
 import SettingsIcon from './icons/SettingsIcon';
+import TicketIcon from './icons/TicketIcon'; // Import TicketIcon
 
 // Declare Swal to inform TypeScript about the global variable from the CDN script
 declare const Swal: any;
@@ -58,7 +60,7 @@ export interface CompanyInfo {
 }
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
-  const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan'>('dashboard');
+  const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher'>('dashboard');
   const [invoiceInitialData, setInvoiceInitialData] = useState<InvoiceInitialData | null>(null);
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
@@ -556,6 +558,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         return 'Invoice';
       case 'kasCadangan':
         return 'Kas Cadangan';
+      case 'voucher':
+        return 'Pendapatan Voucher';
       default:
         return 'Dasbor';
     }
@@ -592,6 +596,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     const pengeluaranTransfer = pengeluaranEntries
       .filter(e => e.metode === 'Transfer')
       .reduce((acc, e) => acc + e.nominal, 0);
+    
+    // Calculate voucher revenue specific
+    const totalVoucherRevenue = financeHistory
+      .filter(e => e.kategori === 'Pemasukan' && e.deskripsi.toLowerCase().includes('voucher'))
+      .reduce((acc, e) => acc + e.nominal, 0);
 
     // New customer counts
     const totalActiveCustomers = customers.length;
@@ -603,6 +612,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     const getCategory = (entry: FinanceEntry): string => {
         const desc = entry.deskripsi.toLowerCase();
         if (entry.kategori === 'Pemasukan') {
+            if (desc.includes('voucher')) return 'Pendapatan Voucher'; // Explicit voucher category
             if (desc.includes('langganan')) return 'Pendapatan Langganan';
             if (desc.includes('pemasangan')) return 'Pendapatan Pemasangan';
             return 'Pemasukan Lainnya';
@@ -670,6 +680,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     
     const categoryColors: { [key: string]: string } = {
         'Pendapatan Langganan': '#22c55e',
+        'Pendapatan Voucher': '#a855f7', // Purple for Voucher
         'Pendapatan Pemasangan': '#4ade80',
         'Pemasukan Lainnya': '#86efac',
         'Belanja Modal': '#ef4444',
@@ -713,6 +724,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                     Rp {kasCadangan.toLocaleString('id-ID')}
                   </p>
               </div>
+              
+              <div className="bg-indigo-500/10 p-4 rounded-lg">
+                  <p className="text-sm text-indigo-400 font-semibold">Pendapatan Voucher</p>
+                  <p className="text-xl sm:text-2xl font-bold text-white">
+                    Rp {totalVoucherRevenue.toLocaleString('id-ID')}
+                  </p>
+              </div>
+
               <div className="bg-purple-500/10 p-4 rounded-lg">
                   <p className="text-sm text-purple-400 font-semibold">Total Pelanggan</p>
                   <p className="text-xl sm:text-2xl font-bold text-white">
@@ -865,6 +884,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             setFinanceHistory={setFinanceHistory}
             onKasActivity={handleKasCadanganNotification}
           />
+        ) : activePage === 'voucher' ? (
+          <VoucherPage
+            onBack={handleBack}
+            financeHistory={financeHistory}
+            setFinanceHistory={setFinanceHistory}
+            onNewFinanceEntry={handleNewFinanceEntryNotification}
+          />
         ) : (
           <>
             {/* Menu Section */}
@@ -905,6 +931,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                       onClick={(e) => { e.preventDefault(); setActivePage('kasCadangan'); }}
                       className="text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 border-b-2 border-transparent hover:border-sky-400 whitespace-nowrap">
                       Kas Cadangan
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      onClick={(e) => { e.preventDefault(); setActivePage('voucher'); }}
+                      className="text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 border-b-2 border-transparent hover:border-sky-400 whitespace-nowrap flex items-center gap-1">
+                      <TicketIcon className="w-4 h-4" />
+                      Pendapatan Voucher
                     </a>
                   </li>
                 </ul>
