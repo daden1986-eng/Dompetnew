@@ -7,6 +7,7 @@ import DocumentIcon from './icons/DocumentIcon';
 
 // Declare Swal to inform TypeScript about the global variable from the CDN script
 declare const Swal: any;
+declare const jspdf: any;
 
 interface Customer {
   id: number;
@@ -86,6 +87,14 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
   const [filterEndDate, setFilterEndDate] = useState('');
   const [financeSearchTerm, setFinanceSearchTerm] = useState('');
   const [isHistoryVisible, setIsHistoryVisible] = useState(true);
+
+  // Derived state for filtered customers
+  const filteredCustomers = customers.filter(customer => {
+    const matchesSearchTerm = customer.nama.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesJenisLangganan = filterJenisLangganan === 'Semua' || customer.jenisLangganan === filterJenisLangganan;
+    const matchesStatus = filterStatus === 'Semua' || customer.status === filterStatus;
+    return matchesSearchTerm && matchesJenisLangganan && matchesStatus;
+  });
 
 
   const resetCustomerForm = () => {
@@ -484,10 +493,10 @@ ${companyInfo.name}`
 };
 
   const handleDownloadCustomerData = () => {
-    if (customers.length === 0) {
+    if (filteredCustomers.length === 0) {
         Swal.fire({
             title: 'Tidak Ada Data',
-            text: 'Tidak ada data pelanggan untuk diunduh.',
+            text: 'Tidak ada data pelanggan yang cocok dengan filter untuk diunduh.',
             icon: 'info',
             customClass: {
                 popup: '!bg-gray-800 !text-white !rounded-lg',
@@ -499,22 +508,85 @@ ${companyInfo.name}`
     }
 
     try {
-        const jsonString = JSON.stringify(customers, null, 2);
-        const blob = new Blob([jsonString], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
+        const { jsPDF } = jspdf;
+        const doc = new jsPDF();
+        const pageWidth = doc.internal.pageSize.getWidth();
+
+        // --- HEADER ---
+        if (companyInfo.logo) {
+            try { doc.addImage(companyInfo.logo, 'PNG', 15, 10, 20, 20); } catch(e) {}
+        }
+        
+        doc.setFontSize(16);
+        doc.setFont('helvetica', 'bold');
+        doc.text(companyInfo.name, 40, 18);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text(companyInfo.address, 40, 24);
+        doc.text(companyInfo.phone ? `Telp: ${companyInfo.phone}` : '', 40, 29);
+
+        doc.setLineWidth(0.5);
+        doc.line(15, 35, pageWidth - 15, 35);
+
+        // --- TITLE ---
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`DAFTAR PELANGGAN`, pageWidth / 2, 45, { align: 'center' });
+        
+        // --- FILTER INFO ---
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        let filterText = `Filter: Status (${filterStatus}), Jenis (${filterJenisLangganan})`;
+        if(searchTerm) filterText += `, Pencarian ("${searchTerm}")`;
+        doc.text(filterText, 15, 52);
+
+        // --- TABLE ---
+        const tableData = filteredCustomers.map((c, index) => {
+            const totalTagihan = Number(c.harga) + c.tunggakan;
+            const dueDateFormatted = new Date(c.dueDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+            
+            return [
+                (index + 1).toString(),
+                c.nama,
+                c.noHp,
+                c.jenisLangganan,
+                c.alamat,
+                `Rp ${Number(c.harga).toLocaleString('id-ID')}`,
+                c.status,
+                `Rp ${c.tunggakan.toLocaleString('id-ID')}`,
+                dueDateFormatted
+            ];
+        });
+
+        (doc as any).autoTable({
+            head: [['No', 'Nama', 'No HP', 'Jenis', 'Alamat', 'Harga', 'Status', 'Tunggakan', 'Jatuh Tempo']],
+            body: tableData,
+            startY: 55,
+            theme: 'grid',
+            headStyles: { fillColor: [44, 62, 80] },
+            styles: { fontSize: 8, cellPadding: 2 },
+            columnStyles: {
+                0: { cellWidth: 10 },
+                1: { cellWidth: 25 },
+                2: { cellWidth: 25 },
+                3: { cellWidth: 20 },
+                4: { cellWidth: 'auto' }, // Alamat flexible
+                5: { cellWidth: 20 },
+                6: { cellWidth: 15 },
+                7: { cellWidth: 20 },
+                8: { cellWidth: 20 },
+            }
+        });
+
+        // Save
         const date = new Date().toISOString().split('T')[0];
-        link.download = `data_pelanggan_${date}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        doc.save(`daftar_pelanggan_${filterStatus}_${date}.pdf`);
+
     } catch (error) {
-        console.error("Gagal membuat file unduhan:", error);
+        console.error("Gagal membuat PDF:", error);
         Swal.fire({
             title: 'Gagal',
-            text: 'Terjadi kesalahan saat menyiapkan file unduhan.',
+            text: 'Terjadi kesalahan saat membuat file PDF.',
             icon: 'error',
             customClass: {
                 popup: '!bg-gray-800 !text-white !rounded-lg',
@@ -525,13 +597,6 @@ ${companyInfo.name}`
     }
   };
 
-  const filteredCustomers = customers.filter(customer => {
-    const matchesSearchTerm = customer.nama.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesJenisLangganan = filterJenisLangganan === 'Semua' || customer.jenisLangganan === filterJenisLangganan;
-    const matchesStatus = filterStatus === 'Semua' || customer.status === filterStatus;
-    return matchesSearchTerm && matchesJenisLangganan && matchesStatus;
-  });
-  
   const filteredFinanceHistory = financeHistory.filter(entry => {
     const entryDate = new Date(entry.tanggal);
     const startDate = filterStartDate ? new Date(filterStartDate) : null;
@@ -1043,10 +1108,10 @@ ${companyInfo.name}`
                 <button
                   onClick={handleDownloadCustomerData}
                   className="flex-1 sm:flex-initial py-2 px-5 flex items-center justify-center gap-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-colors"
-                  title="Unduh Data Pelanggan (JSON)"
+                  title="Unduh Data Pelanggan sebagai PDF"
                 >
                   <DownloadIcon className="w-4 h-4" />
-                  <span>Unduh</span>
+                  <span>Unduh PDF</span>
                 </button>
               </div>
               <div className="w-full sm:w-auto">
