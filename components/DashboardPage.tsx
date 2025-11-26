@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
 import LaporanBulananPage from './LaporanBulananPage';
@@ -57,6 +56,7 @@ export interface CompanyInfo {
     namaBank: string;
     nomorRekening: string;
     atasNama: string;
+    stampLogo: string | null; // Added stampLogo
 }
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
@@ -371,6 +371,13 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
               <input id="swal-company-logo" type="file" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500/20 file:text-blue-300 hover:file:bg-blue-600/30 cursor-pointer">
             </div>
           </div>
+          <div>
+            <label for="swal-company-stamp" class="block text-sm font-medium mb-1">Stempel Perusahaan</label>
+            <div class="flex items-center gap-4">
+              <img id="swal-stamp-preview" src="${companyInfo.stampLogo || 'https://via.placeholder.com/150/1f2937/FFFFFF?text=Stempel'}" alt="Stamp Preview" class="h-20 w-20 object-contain rounded-md bg-gray-700"/>
+              <input id="swal-company-stamp" type="file" accept="image/*" class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-500/20 file:text-blue-300 hover:file:bg-blue-600/30 cursor-pointer">
+            </div>
+          </div>
 
           <h3 class="text-lg font-semibold text-sky-400 border-b border-gray-600 pb-2 pt-4">Informasi Pembayaran</h3>
           <div>
@@ -437,6 +444,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
           }
         };
 
+        const stampInput = document.getElementById('swal-company-stamp') as HTMLInputElement;
+        const stampPreview = document.getElementById('swal-stamp-preview') as HTMLImageElement;
+        stampInput.onchange = () => {
+          const file = stampInput.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              stampPreview.src = e.target?.result as string;
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+
         // Attach backup/restore event listeners
         const backupAllBtn = document.getElementById('swal-backup-all');
         if (backupAllBtn) backupAllBtn.onclick = () => handleBackup('all');
@@ -456,34 +476,69 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         const namaBank = (document.getElementById('swal-bank-name') as HTMLInputElement).value;
         const nomorRekening = (document.getElementById('swal-account-number') as HTMLInputElement).value;
         const atasNama = (document.getElementById('swal-account-name') as HTMLInputElement).value;
+        
         const logoInput = document.getElementById('swal-company-logo') as HTMLInputElement;
         const logoFile = logoInput.files?.[0];
 
+        const stampInput = document.getElementById('swal-company-stamp') as HTMLInputElement;
+        const stampFile = stampInput.files?.[0];
+
         return new Promise((resolve) => {
-          const baseData = {
-              name,
-              address,
-              phone,
-              telegramBotToken,
-              telegramChatId,
-              namaBank,
-              nomorRekening,
-              atasNama,
+          let logoBase64: string | null = companyInfo.logo;
+          let stampBase64: string | null = companyInfo.stampLogo;
+          let filesToProcess = 0;
+          let filesProcessed = 0;
+
+          const checkCompletion = () => {
+            filesProcessed++;
+            if (filesProcessed === filesToProcess) {
+              resolve({
+                name,
+                address,
+                phone,
+                telegramBotToken,
+                telegramChatId,
+                namaBank,
+                nomorRekening,
+                atasNama,
+                logo: logoBase64,
+                stampLogo: stampBase64,
+              });
+            }
           };
 
           if (logoFile) {
+            filesToProcess++;
             const reader = new FileReader();
             reader.onload = (e) => {
-              resolve({
-                ...baseData,
-                logo: e.target?.result as string
-              });
+              logoBase64 = e.target?.result as string;
+              checkCompletion();
             };
             reader.readAsDataURL(logoFile);
-          } else {
+          }
+
+          if (stampFile) {
+            filesToProcess++;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              stampBase64 = e.target?.result as string;
+              checkCompletion();
+            };
+            reader.readAsDataURL(stampFile);
+          }
+          
+          if (filesToProcess === 0) { // No files to upload
             resolve({
-              ...baseData,
-              logo: companyInfo.logo // Keep old logo if no new one is selected
+                name,
+                address,
+                phone,
+                telegramBotToken,
+                telegramChatId,
+                namaBank,
+                nomorRekening,
+                atasNama,
+                logo: companyInfo.logo,
+                stampLogo: companyInfo.stampLogo,
             });
           }
         });

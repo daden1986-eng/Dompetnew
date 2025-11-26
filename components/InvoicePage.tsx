@@ -15,6 +15,7 @@ interface CompanyInfo {
     namaBank: string;
     nomorRekening: string;
     atasNama: string;
+    stampLogo: string | null; // Added stampLogo
 }
 
 interface InvoiceItem {
@@ -295,6 +296,18 @@ Hormat kami,
         doc.setFontSize(10);
         doc.setFont('helvetica', 'normal');
         doc.text('Hormat kami,', signatureX, signatureY);
+        
+        // Add stamp logo if available
+        if (companyInfo.stampLogo) {
+            try {
+                // Position stamp slightly above Director's signature line
+                // Adjust coordinates (x, y, width, height) as needed
+                doc.addImage(companyInfo.stampLogo, 'PNG', signatureX + 5, signatureY + 3, 25, 25); 
+            } catch(e) {
+                console.error("Error adding stamp logo to PDF:", e);
+            }
+        }
+
         doc.text('(___________________)', signatureX, signatureY + 20);
         doc.setFont('helvetica', 'bold');
         doc.text('Direktur', signatureX, signatureY + 25);

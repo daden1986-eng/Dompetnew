@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import DownloadIcon from './icons/DownloadIcon';
@@ -26,6 +27,7 @@ interface CompanyInfo {
     address: string;
     phone: string;
     logo: string | null;
+    stampLogo: string | null; // Added stampLogo
 }
 
 interface LaporanBulananPageProps {
@@ -339,6 +341,17 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     doc.text(`Jakarta, ${today}`, signatureX, signatureY);
     doc.text('Direktur', signatureX, signatureY + 5);
     
+    // Add stamp logo if available
+    if (companyInfo.stampLogo) {
+        try {
+            // Position stamp slightly above Director's signature line
+            // Adjust coordinates (x, y, width, height) as needed
+            doc.addImage(companyInfo.stampLogo, 'PNG', signatureX + 5, signatureY + 8, 25, 25); 
+        } catch(e) {
+            console.error("Error adding stamp logo to PDF:", e);
+        }
+    }
+
     doc.text('(___________________)', signatureX, signatureY + 25);
     doc.setFont('helvetica', 'bold');
     doc.text(companyInfo.name, signatureX, signatureY + 30);

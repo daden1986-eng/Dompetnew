@@ -15,6 +15,7 @@ const defaultCompanyInfo: CompanyInfo = {
     namaBank: '',
     nomorRekening: '',
     atasNama: '',
+    stampLogo: null, // Added stampLogo
 };
 
 
