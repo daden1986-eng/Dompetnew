@@ -38,11 +38,6 @@ interface CompanyInfo {
     namaBank: string;
     nomorRekening: string;
     atasNama: string;
-    // Optional fields to match App.tsx CompanyInfo structure for consistency
-    stampLogo?: string | null;
-    whatsappWebhookUrl?: string;
-    whatsappVerifyToken?: string;
-    geminiApiKey?: string;
 }
 
 interface SirekapPageProps {

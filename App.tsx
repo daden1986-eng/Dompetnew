@@ -15,10 +15,7 @@ const defaultCompanyInfo: CompanyInfo = {
     namaBank: '',
     nomorRekening: '',
     atasNama: '',
-    stampLogo: null,
-    whatsappWebhookUrl: '',
-    whatsappVerifyToken: '',
-    geminiApiKey: '',
+    stampLogo: null, // Added stampLogo
 };
 
 
