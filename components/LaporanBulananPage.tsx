@@ -177,36 +177,159 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
   const handleDownloadPDF = () => {
     const { jsPDF } = jspdf;
     const doc = new jsPDF();
-    
-    // Header
     const pageWidth = doc.internal.pageSize.getWidth();
     
+    // --- COLORS ---
+    const primaryColor = [37, 99, 235]; // Blue 600
+    const lightBgColor = [243, 244, 246]; // Gray 100
+    const accentGreen = [22, 163, 74]; // Green 600
+    const accentRed = [220, 38, 38]; // Red 600
+
+    // --- CALCULATE SUMMARY TOTALS FIRST ---
+    const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
+    const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
+    const totalPemasukan = pemasukanTunai + pemasukanTransfer;
+    
+    const pengeluaranTunai = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
+    const pengeluaranTransfer = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
+    const totalPengeluaran = pengeluaranTunai + pengeluaranTransfer;
+    
+    const saldoAkhirKeseluruhan = totalPemasukan - totalPengeluaran;
+
+    // --- HEADER SECTION ---
+    let startY = 15;
+    
+    // Logo
     if (companyInfo.logo) {
         try {
-            doc.addImage(companyInfo.logo, 'PNG', 15, 15, 25, 25);
+            doc.addImage(companyInfo.logo, 'PNG', 15, startY, 20, 20);
         } catch(e) {
             console.error("Error adding logo to PDF:", e);
         }
     }
 
-    doc.setFontSize(18);
+    // Company Info (Right Aligned or Left next to Logo)
+    doc.setFontSize(22);
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.setFont('helvetica', 'bold');
-    doc.text(companyInfo.name, 45, 22);
+    doc.text(companyInfo.name, 40, startY + 8);
 
     doc.setFontSize(10);
+    doc.setTextColor(80, 80, 80);
     doc.setFont('helvetica', 'normal');
-    doc.text(companyInfo.address, 45, 28);
-    doc.text(`Telp: ${companyInfo.phone}`, 45, 33);
+    doc.text(companyInfo.address, 40, startY + 14);
+    doc.text(`Telp: ${companyInfo.phone}`, 40, startY + 19);
 
-    doc.setLineWidth(0.5);
-    doc.line(15, 40, pageWidth - 15, 40);
+    // Separator Line
+    doc.setDrawColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setLineWidth(0.8);
+    doc.line(15, startY + 25, pageWidth - 15, startY + 25);
 
     // Title
-    doc.setFontSize(14);
+    let currentY = startY + 38;
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
-    doc.text('Laporan Keuangan Bulanan', pageWidth / 2, 50, { align: 'center' });
+    doc.text('LAPORAN KEUANGAN BULANAN', pageWidth / 2, currentY, { align: 'center' });
     
-    // Main Financial Table
+    const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Per Tanggal: ${todayStr}`, pageWidth / 2, currentY + 6, { align: 'center' });
+
+    // --- EXECUTIVE SUMMARY CARDS ---
+    currentY += 15;
+    
+    // Helper to draw summary box
+    const drawSummaryBox = (x: number, width: number, title: string, amount: number, color: number[]) => {
+        // Box Background
+        doc.setFillColor(lightBgColor[0], lightBgColor[1], lightBgColor[2]);
+        doc.setDrawColor(200, 200, 200);
+        doc.roundedRect(x, currentY, width, 25, 3, 3, 'FD');
+        
+        // Left Colored Stripe
+        doc.setFillColor(color[0], color[1], color[2]);
+        doc.rect(x, currentY, 2, 25, 'F');
+
+        // Text
+        doc.setFontSize(9);
+        doc.setTextColor(100, 100, 100);
+        doc.setFont('helvetica', 'bold');
+        doc.text(title, x + 6, currentY + 8);
+        
+        doc.setFontSize(13);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`Rp ${amount.toLocaleString('id-ID')}`, x + 6, currentY + 18);
+    };
+
+    const boxWidth = (pageWidth - 40) / 3; // 3 boxes with spacing
+    drawSummaryBox(15, boxWidth, 'TOTAL PEMASUKAN', totalPemasukan, accentGreen);
+    drawSummaryBox(15 + boxWidth + 5, boxWidth, 'TOTAL PENGELUARAN', totalPengeluaran, accentRed);
+    drawSummaryBox(15 + (boxWidth + 5) * 2, boxWidth, 'SALDO AKHIR', saldoAkhirKeseluruhan, primaryColor);
+
+    currentY += 35;
+
+    // --- TABLE 1: REKAPITULASI TOTAL (Moved Up for Visibility) ---
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text('1. Rekapitulasi & Saldo', 15, currentY);
+    currentY += 2;
+
+    const summaryTableData = [
+        ['Pemasukan (Tunai)', pemasukanTunai.toLocaleString('id-ID')],
+        ['Pemasukan (Transfer)', pemasukanTransfer.toLocaleString('id-ID')],
+        ['Total Pemasukan', totalPemasukan.toLocaleString('id-ID')],
+        ['Pengeluaran (Tunai)', pengeluaranTunai.toLocaleString('id-ID')],
+        ['Pengeluaran (Transfer)', pengeluaranTransfer.toLocaleString('id-ID')],
+        ['Total Pengeluaran', totalPengeluaran.toLocaleString('id-ID')],
+        ['Saldo Operasional (Siap Bagi Hasil)', saldoAkhirKeseluruhan.toLocaleString('id-ID')],
+        ['Kas Cadangan (Dana Darurat)', kasCadangan.toLocaleString('id-ID')],
+    ];
+
+    (doc as any).autoTable({
+        startY: currentY + 3,
+        head: [['Keterangan', 'Jumlah (Rp)']],
+        body: summaryTableData,
+        theme: 'striped',
+        headStyles: { fillColor: primaryColor, halign: 'center' },
+        styles: { fontSize: 10, cellPadding: 3 },
+        columnStyles: {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 60, halign: 'right' }
+        },
+        didParseCell: (data: any) => {
+             if (data.section === 'body') {
+                const rowIndex = data.row.index;
+                // Bold Totals
+                if (rowIndex === 2 || rowIndex === 5) {
+                    data.cell.styles.fontStyle = 'bold';
+                }
+                // Saldo Operasional (Green)
+                if (rowIndex === 6) {
+                    data.cell.styles.fillColor = [209, 250, 229]; 
+                    data.cell.styles.textColor = [6, 95, 70]; 
+                    data.cell.styles.fontStyle = 'bold';
+                }
+                // Kas Cadangan (Blue)
+                if (rowIndex === 7) {
+                    data.cell.styles.fillColor = [224, 242, 254]; 
+                    data.cell.styles.textColor = [7, 89, 133]; 
+                    data.cell.styles.fontStyle = 'bold';
+                }
+             }
+        }
+    });
+
+    currentY = (doc as any).lastAutoTable.finalY + 15;
+
+    // --- TABLE 2: BULANAN (Monthly Breakdown) ---
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.text('2. Ringkasan Per Bulan', 15, currentY);
+    currentY += 2;
+
     const monthlyTableData = monthlyData.map(data => {
         const labaRugi = data.pemasukan - data.pengeluaran;
         return [
@@ -218,117 +341,24 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     });
 
     (doc as any).autoTable({
-        head: [['Bulan', 'Pemasukan (Rp)', 'Pengeluaran (Rp)', 'Laba / Rugi (Rp)']],
+        startY: currentY + 3,
+        head: [['Bulan', 'Pemasukan', 'Pengeluaran', 'Laba / Rugi']],
         body: monthlyTableData,
-        startY: 60,
-        headStyles: { fillColor: [31, 41, 55] },
-        theme: 'grid',
+        theme: 'striped',
+        headStyles: { fillColor: primaryColor, halign: 'center' },
+        styles: { fontSize: 10, cellPadding: 3, halign: 'right' },
+        columnStyles: { 0: { halign: 'left' } }, // Month name left aligned
     });
-    
-    let finalY = (doc as any).lastAutoTable.finalY;
 
-    // --- NEW: Detailed Transaction History Table ---
-    if (financeHistory.length > 0) {
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-        doc.text('Rincian Transaksi Keseluruhan', 15, finalY + 15);
+    currentY = (doc as any).lastAutoTable.finalY + 15;
 
-        const sortedHistory = [...financeHistory].sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
-        
-        const historyTableData = sortedHistory.map(entry => {
-            const formattedDate = new Date(entry.tanggal).toLocaleDateString('id-ID', {
-                timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric'
-            });
-            const nominalDisplay = `${entry.kategori === 'Pemasukan' ? '+' : '-'} ${entry.nominal.toLocaleString('id-ID')}`;
-            return [formattedDate, entry.deskripsi, entry.kategori, entry.metode, nominalDisplay];
-        });
-
-        (doc as any).autoTable({
-            head: [['Tanggal', 'Deskripsi', 'Kategori', 'Metode', 'Nominal (Rp)']],
-            body: historyTableData,
-            startY: finalY + 20,
-            headStyles: { fillColor: [31, 41, 55] },
-            theme: 'grid',
-            didDrawCell: (data: any) => {
-                // Right-align the 'Nominal' column
-                if (data.section === 'body' && data.column.index === 4) {
-                    data.cell.styles.halign = 'right';
-                }
-            }
-        });
-        finalY = (doc as any).lastAutoTable.finalY;
-    }
-
-    // --- NEW: Transaction Summary by Method ---
-    const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
-    const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
-    const totalPemasukan = pemasukanTunai + pemasukanTransfer;
-    const pengeluaranTunai = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
-    const pengeluaranTransfer = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
-    const totalPengeluaran = pengeluaranTunai + pengeluaranTransfer;
-    const saldoAkhirKeseluruhan = totalPemasukan - totalPengeluaran;
-
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Rekapitulasi Total Transaksi', 15, finalY + 15);
-
-    const summaryTableData = [
-        ['Pemasukan (Tunai)', pemasukanTunai.toLocaleString('id-ID')],
-        ['Pemasukan (Transfer)', pemasukanTransfer.toLocaleString('id-ID')],
-        ['Total Pemasukan', totalPemasukan.toLocaleString('id-ID')],
-        ['Pengeluaran (Tunai)', pengeluaranTunai.toLocaleString('id-ID')],
-        ['Pengeluaran (Transfer)', pengeluaranTransfer.toLocaleString('id-ID')],
-        ['Total Pengeluaran', totalPengeluaran.toLocaleString('id-ID')],
-        ['Saldo Operasional (Dana Siap Bagi Hasil)', saldoAkhirKeseluruhan.toLocaleString('id-ID')],
-        ['Kas Cadangan (Dana Darurat/Simpanan)', kasCadangan.toLocaleString('id-ID')],
-    ];
-    
-    (doc as any).autoTable({
-        head: [['Deskripsi', 'Jumlah (Rp)']],
-        body: summaryTableData,
-        startY: finalY + 20,
-        headStyles: { fillColor: [31, 41, 55] },
-        theme: 'grid',
-        didParseCell: (data: any) => {
-             if (data.section === 'body') {
-                const rowIndex = data.row.index;
-                
-                // Bold Total Pemasukan (Index 2) and Total Pengeluaran (Index 5)
-                if (rowIndex === 2 || rowIndex === 5) {
-                    data.cell.styles.fontStyle = 'bold';
-                }
-
-                // Style for Saldo Operasional (Index 6) - Greenish
-                if (rowIndex === 6) {
-                    data.cell.styles.fillColor = [209, 250, 229]; // Light Emerald background
-                    data.cell.styles.textColor = [6, 95, 70]; // Dark Emerald text
-                    data.cell.styles.fontStyle = 'bold';
-                }
-
-                // Style for Kas Cadangan (Index 7) - Blueish
-                if (rowIndex === 7) {
-                    data.cell.styles.fillColor = [224, 242, 254]; // Light Sky background
-                    data.cell.styles.textColor = [7, 89, 133]; // Dark Sky text
-                    data.cell.styles.fontStyle = 'bold';
-                }
-             }
-        },
-        didDrawCell: (data: any) => {
-            if (data.section === 'body') {
-                data.cell.styles.halign = 'right';
-            }
-        },
-        columnStyles: {
-            0: { halign: 'left' } // Force description to left align, overrides didDrawCell halign=right
-        }
-    });
-    finalY = (doc as any).lastAutoTable.finalY;
-
-    // Profit Sharing Table (if data exists)
+    // --- TABLE 3: PROFIT SHARING (If Exists) ---
     if (profitSharingData && profitSharingData.length > 0) {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.text('Rekapitulasi Bagi Hasil', 15, finalY + 15);
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.text('3. Rincian Bagi Hasil', 15, currentY);
+        currentY += 2;
 
         const profitShareTableData = profitSharingData.map(item => [
             item.nama,
@@ -336,47 +366,98 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         ]);
         
         (doc as any).autoTable({
+            startY: currentY + 3,
             head: [['Nama Anggota', 'Jumlah Diterima (Rp)']],
             body: profitShareTableData,
-            startY: finalY + 20,
-            headStyles: { fillColor: [31, 41, 55] },
-            theme: 'grid',
+            theme: 'striped',
+            headStyles: { fillColor: primaryColor },
+            styles: { fontSize: 10, cellPadding: 3 },
+            columnStyles: { 1: { halign: 'right' } }
         });
-        finalY = (doc as any).lastAutoTable.finalY;
+        currentY = (doc as any).lastAutoTable.finalY + 15;
     }
 
+    // --- TABLE 4: DETAILED HISTORY (Optional/Last) ---
+    if (financeHistory.length > 0) {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+        doc.text('4. Rincian Transaksi Terakhir', 15, currentY);
+        currentY += 2;
 
-    // Signature
+        const sortedHistory = [...financeHistory].sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
+        // Limit to reasonable amount if needed, or show all. Let's show all but careful with pages.
+        
+        const historyTableData = sortedHistory.map(entry => {
+            const formattedDate = new Date(entry.tanggal).toLocaleDateString('id-ID', {
+                timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric'
+            });
+            // Symbol for visualization
+            const symbol = entry.kategori === 'Pemasukan' ? '+' : '-';
+            return [
+                formattedDate, 
+                entry.deskripsi, 
+                entry.kategori, 
+                symbol + ' ' + entry.nominal.toLocaleString('id-ID')
+            ];
+        });
+
+        (doc as any).autoTable({
+            startY: currentY + 3,
+            head: [['Tanggal', 'Deskripsi', 'Kategori', 'Nominal (Rp)']],
+            body: historyTableData,
+            theme: 'striped',
+            headStyles: { fillColor: [75, 85, 99] }, // Dark gray for detailed list to differentiate
+            styles: { fontSize: 8, cellPadding: 2 },
+            columnStyles: { 
+                0: { cellWidth: 25 },
+                1: { cellWidth: 'auto' },
+                2: { cellWidth: 25 },
+                3: { cellWidth: 35, halign: 'right' }
+            },
+            didParseCell: (data: any) => {
+                // Color text based on category
+                if (data.section === 'body' && data.column.index === 3) {
+                    const rawVal = data.row.raw[2]; // Kategori
+                    if (rawVal === 'Pemasukan') data.cell.styles.textColor = accentGreen;
+                    else data.cell.styles.textColor = accentRed;
+                }
+            }
+        });
+        currentY = (doc as any).lastAutoTable.finalY;
+    }
+
+    // --- SIGNATURE SECTION ---
+    // Ensure we don't fall off the page
+    if (currentY > 240) {
+        doc.addPage();
+        currentY = 20;
+    } else {
+        currentY += 25;
+    }
+
     const signatureX = pageWidth - 70;
-    const signatureY = finalY + 20;
     
-    const today = new Date().toLocaleDateString('id-ID', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-    });
-
     doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Jakarta, ${today}`, signatureX, signatureY);
-    doc.text('Direktur', signatureX, signatureY + 5);
+    doc.text(`Jakarta, ${todayStr}`, signatureX, currentY);
+    doc.text('Direktur', signatureX, currentY + 5);
     
-    // Add stamp logo if available
+    // Stamp Logic
     if (companyInfo.stampLogo) {
         try {
-            // Position stamp slightly above Director's signature line
-            // Adjust coordinates (x, y, width, height) as needed
-            doc.addImage(companyInfo.stampLogo, 'PNG', signatureX + 5, signatureY + 8, 25, 25); 
+            doc.addImage(companyInfo.stampLogo, 'PNG', signatureX + 5, currentY + 8, 25, 25); 
         } catch(e) {
             console.error("Error adding stamp logo to PDF:", e);
         }
     }
 
-    doc.text('(___________________)', signatureX, signatureY + 25);
+    doc.text('(___________________)', signatureX, currentY + 25);
     doc.setFont('helvetica', 'bold');
-    doc.text(companyInfo.name, signatureX, signatureY + 30);
+    doc.text(companyInfo.name, signatureX, currentY + 30);
 
-    doc.save('laporan-bulanan.pdf');
+    doc.save('laporan_keuangan_bulanan.pdf');
   };
 
   return (
