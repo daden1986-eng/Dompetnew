@@ -185,16 +185,26 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     const accentGreen = [22, 163, 74]; // Green 600
     const accentRed = [220, 38, 38]; // Red 600
 
-    // --- CALCULATE SUMMARY TOTALS FIRST ---
+    // --- CALCULATE SUMMARY TOTALS ---
     const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
     const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
     const totalPemasukan = pemasukanTunai + pemasukanTransfer;
     
-    const pengeluaranTunai = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
-    const pengeluaranTransfer = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
-    const totalPengeluaran = pengeluaranTunai + pengeluaranTransfer;
+    // Split Expenses: Operational vs Profit Sharing
+    const pengeluaranBagiHasil = financeHistory
+        .filter(e => e.kategori === 'Pengeluaran' && e.deskripsi.toLowerCase().includes('bagi hasil'))
+        .reduce((sum, e) => sum + e.nominal, 0);
+
+    const pengeluaranTotal = financeHistory
+        .filter(e => e.kategori === 'Pengeluaran')
+        .reduce((sum, e) => sum + e.nominal, 0);
     
-    const saldoAkhirKeseluruhan = totalPemasukan - totalPengeluaran;
+    // Operational Expense (Real expenses before profit share)
+    const pengeluaranOperasional = pengeluaranTotal - pengeluaranBagiHasil;
+    
+    // Balance Logic
+    const saldoOperasionalBersih = totalPemasukan - pengeluaranOperasional; // Laba sebelum bagi hasil
+    const saldoAkhirKeseluruhan = totalPemasukan - pengeluaranTotal; // Should be 0 if profit share done
 
     // --- HEADER SECTION ---
     let startY = 15;
@@ -263,13 +273,17 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     };
 
     const boxWidth = (pageWidth - 40) / 3; // 3 boxes with spacing
+    
+    // Top cards focus on performance
     drawSummaryBox(15, boxWidth, 'TOTAL PEMASUKAN', totalPemasukan, accentGreen);
-    drawSummaryBox(15 + boxWidth + 5, boxWidth, 'TOTAL PENGELUARAN', totalPengeluaran, accentRed);
+    // Show Operational Expense here to show efficiency
+    drawSummaryBox(15 + boxWidth + 5, boxWidth, 'BIAYA OPERASIONAL', pengeluaranOperasional, accentRed);
+    // Show Real Final Balance
     drawSummaryBox(15 + (boxWidth + 5) * 2, boxWidth, 'SALDO AKHIR', saldoAkhirKeseluruhan, primaryColor);
 
     currentY += 35;
 
-    // --- TABLE 1: REKAPITULASI TOTAL (Moved Up for Visibility) ---
+    // --- TABLE 1: REKAPITULASI TOTAL ---
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
@@ -277,14 +291,12 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     currentY += 2;
 
     const summaryTableData = [
-        ['Pemasukan (Tunai)', pemasukanTunai.toLocaleString('id-ID')],
-        ['Pemasukan (Transfer)', pemasukanTransfer.toLocaleString('id-ID')],
-        ['Total Pemasukan', totalPemasukan.toLocaleString('id-ID')],
-        ['Pengeluaran (Tunai)', pengeluaranTunai.toLocaleString('id-ID')],
-        ['Pengeluaran (Transfer)', pengeluaranTransfer.toLocaleString('id-ID')],
-        ['Total Pengeluaran', totalPengeluaran.toLocaleString('id-ID')],
-        ['Saldo Operasional (Siap Bagi Hasil)', saldoAkhirKeseluruhan.toLocaleString('id-ID')],
-        ['Kas Cadangan (Dana Darurat)', kasCadangan.toLocaleString('id-ID')],
+        ['Pemasukan (Tunai + Transfer)', totalPemasukan.toLocaleString('id-ID')],
+        ['(-) Pengeluaran Operasional', pengeluaranOperasional.toLocaleString('id-ID')],
+        ['Laba Operasional Bersih', saldoOperasionalBersih.toLocaleString('id-ID')], // Subtotal
+        ['(-) Pembagian Hasil Usaha', pengeluaranBagiHasil.toLocaleString('id-ID')],
+        ['Saldo Akhir Ditahan', saldoAkhirKeseluruhan.toLocaleString('id-ID')], // Final Result
+        ['Kas Cadangan (Dana Darurat)', kasCadangan.toLocaleString('id-ID')], // Separate
     ];
 
     (doc as any).autoTable({
@@ -301,21 +313,27 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         didParseCell: (data: any) => {
              if (data.section === 'body') {
                 const rowIndex = data.row.index;
-                // Bold Totals
-                if (rowIndex === 2 || rowIndex === 5) {
+                // Bold rows
+                if (rowIndex === 2 || rowIndex === 4 || rowIndex === 5) {
                     data.cell.styles.fontStyle = 'bold';
                 }
-                // Saldo Operasional (Green)
-                if (rowIndex === 6) {
-                    data.cell.styles.fillColor = [209, 250, 229]; 
-                    data.cell.styles.textColor = [6, 95, 70]; 
-                    data.cell.styles.fontStyle = 'bold';
+                
+                // Laba Operasional (Green Background)
+                if (rowIndex === 2) {
+                    data.cell.styles.fillColor = [220, 252, 231]; // green-100
+                    data.cell.styles.textColor = [22, 101, 52]; // green-800
                 }
-                // Kas Cadangan (Blue)
-                if (rowIndex === 7) {
-                    data.cell.styles.fillColor = [224, 242, 254]; 
-                    data.cell.styles.textColor = [7, 89, 133]; 
-                    data.cell.styles.fontStyle = 'bold';
+
+                // Saldo Akhir (Should be 0 if shared, or blueish if not) - but make it distinct
+                if (rowIndex === 4) {
+                    data.cell.styles.fillColor = [243, 244, 246]; // gray-100
+                    data.cell.styles.textColor = [31, 41, 55]; // gray-800
+                }
+
+                // Kas Cadangan (Blue Background) - Completely separate visually
+                if (rowIndex === 5) {
+                    data.cell.styles.fillColor = [224, 242, 254]; // sky-100
+                    data.cell.styles.textColor = [3, 105, 161]; // sky-700
                 }
              }
         }
@@ -323,7 +341,7 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
 
     currentY = (doc as any).lastAutoTable.finalY + 15;
 
-    // --- TABLE 2: BULANAN (Monthly Breakdown) ---
+    // --- TABLE 2: BULANAN ---
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
@@ -347,7 +365,7 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         theme: 'striped',
         headStyles: { fillColor: primaryColor, halign: 'center' },
         styles: { fontSize: 10, cellPadding: 3, halign: 'right' },
-        columnStyles: { 0: { halign: 'left' } }, // Month name left aligned
+        columnStyles: { 0: { halign: 'left' } },
     });
 
     currentY = (doc as any).lastAutoTable.finalY + 15;
@@ -377,7 +395,7 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         currentY = (doc as any).lastAutoTable.finalY + 15;
     }
 
-    // --- TABLE 4: DETAILED HISTORY (Optional/Last) ---
+    // --- TABLE 4: DETAILED HISTORY ---
     if (financeHistory.length > 0) {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
@@ -386,13 +404,11 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         currentY += 2;
 
         const sortedHistory = [...financeHistory].sort((a, b) => new Date(a.tanggal).getTime() - new Date(b.tanggal).getTime());
-        // Limit to reasonable amount if needed, or show all. Let's show all but careful with pages.
         
         const historyTableData = sortedHistory.map(entry => {
             const formattedDate = new Date(entry.tanggal).toLocaleDateString('id-ID', {
                 timeZone: 'UTC', day: '2-digit', month: 'short', year: 'numeric'
             });
-            // Symbol for visualization
             const symbol = entry.kategori === 'Pemasukan' ? '+' : '-';
             return [
                 formattedDate, 
@@ -407,7 +423,7 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
             head: [['Tanggal', 'Deskripsi', 'Kategori', 'Nominal (Rp)']],
             body: historyTableData,
             theme: 'striped',
-            headStyles: { fillColor: [75, 85, 99] }, // Dark gray for detailed list to differentiate
+            headStyles: { fillColor: [75, 85, 99] }, 
             styles: { fontSize: 8, cellPadding: 2 },
             columnStyles: { 
                 0: { cellWidth: 25 },
@@ -416,9 +432,8 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
                 3: { cellWidth: 35, halign: 'right' }
             },
             didParseCell: (data: any) => {
-                // Color text based on category
                 if (data.section === 'body' && data.column.index === 3) {
-                    const rawVal = data.row.raw[2]; // Kategori
+                    const rawVal = data.row.raw[2]; 
                     if (rawVal === 'Pemasukan') data.cell.styles.textColor = accentGreen;
                     else data.cell.styles.textColor = accentRed;
                 }
@@ -428,7 +443,6 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     }
 
     // --- SIGNATURE SECTION ---
-    // Ensure we don't fall off the page
     if (currentY > 240) {
         doc.addPage();
         currentY = 20;
