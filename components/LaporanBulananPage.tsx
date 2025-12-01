@@ -44,16 +44,17 @@ interface LaporanBulananPageProps {
 const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, financeHistory, companyInfo, profitSharingData, setFinanceHistory, setProfitSharingData, kasCadangan, onProfitShareProcessed }) => {
   const [members, setMembers] = useState<string[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
+  const [filterMonth, setFilterMonth] = useState<string>(''); // Filter state for month
 
   const generateReport = () => {
-    const report: { [key: string]: { pemasukan: number; pengeluaran: number } } = {};
+    const report: { [key: string]: { pemasukan: number; pengeluaran: number; rawDate: string } } = {};
 
     financeHistory.forEach(entry => {
       // Group by YYYY-MM for easy sorting
       const monthYearKey = entry.tanggal.substring(0, 7); // "YYYY-MM"
 
       if (!report[monthYearKey]) {
-        report[monthYearKey] = { pemasukan: 0, pengeluaran: 0 };
+        report[monthYearKey] = { pemasukan: 0, pengeluaran: 0, rawDate: monthYearKey };
       }
 
       if (entry.kategori === 'Pemasukan') {
@@ -173,6 +174,12 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
 
 
   const monthlyData = generateReport();
+  
+  // Filter displayed data based on selection
+  const filteredMonthlyData = useMemo(() => {
+    if (!filterMonth) return monthlyData;
+    return monthlyData.filter(d => d.rawDate === filterMonth);
+  }, [monthlyData, filterMonth]);
 
   const handleDownloadPDF = () => {
     const { jsPDF } = jspdf;
@@ -490,26 +497,41 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
       <main className="flex-grow flex flex-col bg-black/20 rounded-lg p-6 sm:p-8 space-y-12">
         {/* Monthly Report Section */}
         <div>
-          <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
               <h2 className="text-3xl font-semibold">Rekap Laporan Bulanan</h2>
-              <button
-                  onClick={handleDownloadPDF}
-                  disabled={monthlyData.length === 0}
-                  className="flex items-center gap-2 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
-                  aria-label="Unduh Laporan sebagai PDF"
-              >
-                  <DownloadIcon className="w-5 h-5"/>
-                  <span>Unduh PDF</span>
-              </button>
+              
+              <div className="flex flex-col sm:flex-row gap-4 items-center">
+                {/* Month Filter Selector */}
+                <select
+                    value={filterMonth}
+                    onChange={(e) => setFilterMonth(e.target.value)}
+                    className="bg-gray-800 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="">Tampilkan Semua</option>
+                    {monthlyData.map(data => (
+                        <option key={data.rawDate} value={data.rawDate}>{data.month}</option>
+                    ))}
+                </select>
+
+                <button
+                    onClick={handleDownloadPDF}
+                    disabled={monthlyData.length === 0}
+                    className="flex items-center gap-2 py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-colors disabled:bg-gray-500 disabled:cursor-not-allowed"
+                    aria-label="Unduh Laporan sebagai PDF"
+                >
+                    <DownloadIcon className="w-5 h-5"/>
+                    <span>Unduh PDF</span>
+                </button>
+              </div>
           </div>
           
-          {monthlyData.length === 0 ? (
+          {filteredMonthlyData.length === 0 ? (
             <div className="text-center text-gray-400 mt-8">
               <p>Belum ada data transaksi untuk ditampilkan.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {monthlyData.map(data => {
+              {filteredMonthlyData.map(data => {
                 const labaRugi = data.pemasukan - data.pengeluaran;
                 return (
                   <div key={data.month} className="bg-white/5 p-6 rounded-lg shadow-lg flex flex-col">
