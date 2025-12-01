@@ -4,12 +4,13 @@ import SirekapPage from './SirekapPage';
 import LaporanBulananPage from './LaporanBulananPage';
 import InvoicePage, { InvoiceInitialData } from './InvoicePage';
 import KasCadanganPage from './KasCadanganPage';
-import VoucherPage from './VoucherPage'; // Import VoucherPage
-// FIX: Import ProfitShare to break circular dependency
+import VoucherPage from './VoucherPage';
+import WhatsappCSPage from './WhatsappCSPage'; // Import WhatsappCSPage
 import { ProfitShare } from './LaporanBulananPage';
 import * as Recharts from 'recharts';
 import SettingsIcon from './icons/SettingsIcon';
-import TicketIcon from './icons/TicketIcon'; // Import TicketIcon
+import TicketIcon from './icons/TicketIcon';
+import ChatBubbleIcon from './icons/ChatBubbleIcon'; // Import ChatBubbleIcon
 
 // Declare Swal to inform TypeScript about the global variable from the CDN script
 declare const Swal: any;
@@ -35,7 +36,7 @@ interface Customer {
   harga: string;
   status: 'Lunas' | 'Belum Lunas';
   tunggakan: number;
-  dueDate: string; // Added dueDate
+  dueDate: string;
 }
 
 interface FinanceEntry {
@@ -57,11 +58,14 @@ export interface CompanyInfo {
     namaBank: string;
     nomorRekening: string;
     atasNama: string;
-    stampLogo: string | null; // Added stampLogo
+    stampLogo: string | null;
+    whatsappWebhookUrl: string;
+    whatsappVerifyToken: string;
+    geminiApiKey: string;
 }
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
-  const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher'>('dashboard');
+  const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher' | 'whatsappCS'>('dashboard');
   const [invoiceInitialData, setInvoiceInitialData] = useState<InvoiceInitialData | null>(null);
 
   // State for dashboard date filter
@@ -507,6 +511,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                 atasNama,
                 logo: logoBase64,
                 stampLogo: stampBase64,
+                // Preserve existing WA/Gemini keys as they are managed in their own page, 
+                // but needed for the full object state
+                whatsappWebhookUrl: companyInfo.whatsappWebhookUrl,
+                whatsappVerifyToken: companyInfo.whatsappVerifyToken,
+                geminiApiKey: companyInfo.geminiApiKey,
               });
             }
           };
@@ -543,6 +552,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                 atasNama,
                 logo: companyInfo.logo,
                 stampLogo: companyInfo.stampLogo,
+                whatsappWebhookUrl: companyInfo.whatsappWebhookUrl,
+                whatsappVerifyToken: companyInfo.whatsappVerifyToken,
+                geminiApiKey: companyInfo.geminiApiKey,
             });
           }
         });
@@ -619,6 +631,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         return 'Kas Cadangan';
       case 'voucher':
         return 'Pendapatan Voucher';
+      case 'whatsappCS':
+        return 'WhatsApp Gateway';
       default:
         return 'Dasbor';
     }
@@ -1004,6 +1018,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             setFinanceHistory={setFinanceHistory}
             onNewFinanceEntry={handleNewFinanceEntryNotification}
           />
+        ) : activePage === 'whatsappCS' ? (
+          <WhatsappCSPage
+            onBack={handleBack}
+            companyInfo={companyInfo}
+            setCompanyInfo={setCompanyInfo}
+          />
         ) : (
           <>
             {/* Menu Section */}
@@ -1053,6 +1073,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                       className="text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 border-b-2 border-transparent hover:border-sky-400 whitespace-nowrap flex items-center gap-1">
                       <TicketIcon className="w-4 h-4" />
                       Pendapatan Voucher
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      onClick={(e) => { e.preventDefault(); setActivePage('whatsappCS'); }}
+                      className="text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 border-b-2 border-transparent hover:border-sky-400 whitespace-nowrap flex items-center gap-1">
+                      <ChatBubbleIcon className="w-4 h-4" />
+                      WhatsApp CS
                     </a>
                   </li>
                 </ul>
