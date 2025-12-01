@@ -279,8 +279,8 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         ['Pengeluaran (Tunai)', pengeluaranTunai.toLocaleString('id-ID')],
         ['Pengeluaran (Transfer)', pengeluaranTransfer.toLocaleString('id-ID')],
         ['Total Pengeluaran', totalPengeluaran.toLocaleString('id-ID')],
-        ['Saldo Akhir Keseluruhan', saldoAkhirKeseluruhan.toLocaleString('id-ID')],
-        ['Kas Cadangan', kasCadangan.toLocaleString('id-ID')],
+        ['Saldo Operasional (Dana Siap Bagi Hasil)', saldoAkhirKeseluruhan.toLocaleString('id-ID')],
+        ['Kas Cadangan (Dana Darurat/Simpanan)', kasCadangan.toLocaleString('id-ID')],
     ];
     
     (doc as any).autoTable({
@@ -289,17 +289,37 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         startY: finalY + 20,
         headStyles: { fillColor: [31, 41, 55] },
         theme: 'grid',
+        didParseCell: (data: any) => {
+             if (data.section === 'body') {
+                const rowIndex = data.row.index;
+                
+                // Bold Total Pemasukan (Index 2) and Total Pengeluaran (Index 5)
+                if (rowIndex === 2 || rowIndex === 5) {
+                    data.cell.styles.fontStyle = 'bold';
+                }
+
+                // Style for Saldo Operasional (Index 6) - Greenish
+                if (rowIndex === 6) {
+                    data.cell.styles.fillColor = [209, 250, 229]; // Light Emerald background
+                    data.cell.styles.textColor = [6, 95, 70]; // Dark Emerald text
+                    data.cell.styles.fontStyle = 'bold';
+                }
+
+                // Style for Kas Cadangan (Index 7) - Blueish
+                if (rowIndex === 7) {
+                    data.cell.styles.fillColor = [224, 242, 254]; // Light Sky background
+                    data.cell.styles.textColor = [7, 89, 133]; // Dark Sky text
+                    data.cell.styles.fontStyle = 'bold';
+                }
+             }
+        },
         didDrawCell: (data: any) => {
             if (data.section === 'body') {
                 data.cell.styles.halign = 'right';
-                // Make headers bold
-                if (data.row.index === 2 || data.row.index === 5 || data.row.index === 6 || data.row.index === 7) {
-                    data.cell.styles.fontStyle = 'bold';
-                }
             }
         },
         columnStyles: {
-            0: { halign: 'left', fontStyle: 'bold' }
+            0: { halign: 'left' } // Force description to left align, overrides didDrawCell halign=right
         }
     });
     finalY = (doc as any).lastAutoTable.finalY;
