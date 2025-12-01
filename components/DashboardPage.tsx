@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
 import LaporanBulananPage from './LaporanBulananPage';
@@ -63,9 +62,6 @@ export interface CompanyInfo {
 const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
   const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher'>('dashboard');
   const [invoiceInitialData, setInvoiceInitialData] = useState<InvoiceInitialData | null>(null);
-
-  // State for dashboard date filter
-  const [dashboardFilterDate, setDashboardFilterDate] = useState<string>(''); // '' means All Time, otherwise 'YYYY-MM'
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
     try {
@@ -624,12 +620,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     }
   };
 
-  // Get unique months from finance history for filtering
-  const availableMonths = useMemo(() => {
-    const months = new Set(financeHistory.map(e => e.tanggal.substring(0, 7))); // YYYY-MM
-    return Array.from(months).sort().reverse();
-  }, [financeHistory]);
-
   const renderFinancialVisualisation = () => {
     if (financeHistory.length === 0 && customers.length === 0) { // Check both finance and customers
       const capitalizedUsername = username.charAt(0).toUpperCase() + username.slice(1);
@@ -641,23 +631,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
       );
     }
     
-    // Filter logic based on dashboardFilterDate
-    const filteredFinanceHistory = useMemo(() => {
-        if (!dashboardFilterDate) return financeHistory;
-        return financeHistory.filter(e => e.tanggal.startsWith(dashboardFilterDate));
-    }, [financeHistory, dashboardFilterDate]);
-
-    // Calculate summary data based on filtered history
-    const pemasukanEntries = filteredFinanceHistory.filter(e => e.kategori === 'Pemasukan');
-    const pengeluaranEntries = filteredFinanceHistory.filter(e => e.kategori === 'Pengeluaran');
+    // Calculate summary data
+    const pemasukanEntries = financeHistory.filter(e => e.kategori === 'Pemasukan');
+    const pengeluaranEntries = financeHistory.filter(e => e.kategori === 'Pengeluaran');
 
     const totalPemasukan = pemasukanEntries.reduce((acc, e) => acc + e.nominal, 0);
     const totalPengeluaran = pengeluaranEntries.reduce((acc, e) => acc + e.nominal, 0);
-    
-    // NOTE: Saldo Akhir in the card should generally be the *Current* balance (All Time),
-    // but if filtering by month, it shows the Net Income for that month.
-    // Let's make it reflect the "Profit/Loss" for the selected period if filtered, or Total Balance if All Time.
-    const periodBalance = totalPemasukan - totalPengeluaran;
     
     const pemasukanTunai = pemasukanEntries
       .filter(e => e.metode === 'Tunai')
@@ -673,12 +652,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
       .filter(e => e.metode === 'Transfer')
       .reduce((acc, e) => acc + e.nominal, 0);
     
-    // Calculate voucher revenue specific to filtered period
-    const totalVoucherRevenue = filteredFinanceHistory
+    // Calculate voucher revenue specific
+    const totalVoucherRevenue = financeHistory
       .filter(e => e.kategori === 'Pemasukan' && e.deskripsi.toLowerCase().includes('voucher'))
       .reduce((acc, e) => acc + e.nominal, 0);
 
-    // Customer counts are static (current state), not historical snapshots
+    // New customer counts
     const totalActiveCustomers = customers.length;
     const totalPaidCustomers = customers.filter(c => c.status === 'Lunas').length;
     const totalUnpaidCustomers = customers.filter(c => c.status === 'Belum Lunas').length;
@@ -704,7 +683,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     const allIncomeCategories = new Set<string>();
     const allExpenseCategories = new Set<string>();
 
-    filteredFinanceHistory.forEach(entry => {
+    financeHistory.forEach(entry => {
         const date = entry.tanggal;
         const category = getCategory(entry);
 
@@ -724,8 +703,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         dailyDataCategorized[date][category] += entry.nominal;
     });
 
-    // If filtering by month, calculating a running balance graph line starting from 0 (net change) is more appropriate
-    // than trying to calculate absolute historical balance for that specific month start.
     let cumulativeBalance = 0;
     const allCategories = [...Array.from(allIncomeCategories), ...Array.from(allExpenseCategories)];
 
@@ -735,13 +712,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             const dayData = dailyDataCategorized[date];
             let dailyIncome = 0;
             let dailyExpense = 0;
-            
-            // Format date for display. If filtered by month, maybe just show Day?
-            // Currently using full date which is fine.
-            const displayDate = new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
             const chartEntry: { [key: string]: any } = {
-                date: displayDate,
+                date: new Date(date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
             };
 
             allCategories.forEach(cat => {
@@ -775,33 +748,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
 
     return (
        <div className="bg-black/20 rounded-lg p-4 sm:p-8 w-full flex-grow">
-          <div className="flex flex-col sm:flex-row justify-between items-center mb-6">
-            <h2 className="text-2xl sm:text-3xl font-semibold text-center sm:text-left">Ringkasan Keuangan & Pelanggan</h2>
-            
-            {/* Month Filter Selector */}
-            <div className="mt-4 sm:mt-0">
-                <select
-                    value={dashboardFilterDate}
-                    onChange={(e) => setDashboardFilterDate(e.target.value)}
-                    className="bg-gray-800 text-white border border-gray-600 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                    <option value="">Semua Waktu</option>
-                    {availableMonths.map(monthStr => {
-                        const [year, month] = monthStr.split('-');
-                        const date = new Date(Number(year), Number(month) - 1);
-                        const label = date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-                        return <option key={monthStr} value={monthStr}>{label}</option>;
-                    })}
-                </select>
-            </div>
-          </div>
-
+          <h2 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">Ringkasan Keuangan & Pelanggan</h2>
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
               <div className="bg-green-500/10 p-4 rounded-lg">
-                  <p className="text-sm text-green-400 font-semibold">
-                      {dashboardFilterDate ? 'Pemasukan (Bulan Ini)' : 'Total Pemasukan'}
-                  </p>
+                  <p className="text-sm text-green-400 font-semibold">Total Pemasukan</p>
                   <p className="text-xl sm:text-2xl font-bold text-white">Rp {totalPemasukan.toLocaleString('id-ID')}</p>
                    <div className="mt-2 text-xs text-gray-300 space-y-1">
                       <p>Tunai: Rp {pemasukanTunai.toLocaleString('id-ID')}</p>
@@ -809,9 +760,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                   </div>
               </div>
               <div className="bg-red-500/10 p-4 rounded-lg">
-                  <p className="text-sm text-red-400 font-semibold">
-                      {dashboardFilterDate ? 'Pengeluaran (Bulan Ini)' : 'Total Pengeluaran'}
-                  </p>
+                  <p className="text-sm text-red-400 font-semibold">Total Pengeluaran</p>
                   <p className="text-xl sm:text-2xl font-bold text-white">Rp {totalPengeluaran.toLocaleString('id-ID')}</p>
                   <div className="mt-2 text-xs text-gray-300 space-y-1">
                       <p>Tunai: Rp {pengeluaranTunai.toLocaleString('id-ID')}</p>
@@ -819,11 +768,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                   </div>
               </div>
               <div className="bg-sky-500/10 p-4 rounded-lg">
-                  <p className="text-sm text-sky-400 font-semibold">
-                      {dashboardFilterDate ? 'Laba/Rugi (Bulan Ini)' : 'Saldo Akhir'}
-                  </p>
-                  <p className={`text-xl sm:text-2xl font-bold ${periodBalance >= 0 ? 'text-white' : 'text-red-400'}`}>
-                    Rp {periodBalance.toLocaleString('id-ID')}
+                  <p className="text-sm text-sky-400 font-semibold">Saldo Akhir</p>
+                  <p className={`text-xl sm:text-2xl font-bold ${saldoAkhir >= 0 ? 'text-white' : 'text-red-400'}`}>
+                    Rp {saldoAkhir.toLocaleString('id-ID')}
                   </p>
               </div>
               <div className="bg-slate-500/10 p-4 rounded-lg">
@@ -834,9 +781,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
               </div>
               
               <div className="bg-indigo-500/10 p-4 rounded-lg">
-                  <p className="text-sm text-indigo-400 font-semibold">
-                       {dashboardFilterDate ? 'Voucher (Bulan Ini)' : 'Pendapatan Voucher'}
-                  </p>
+                  <p className="text-sm text-indigo-400 font-semibold">Pendapatan Voucher</p>
                   <p className="text-xl sm:text-2xl font-bold text-white">
                     Rp {totalVoucherRevenue.toLocaleString('id-ID')}
                   </p>
@@ -847,21 +792,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                   <p className="text-xl sm:text-2xl font-bold text-white">
                     {totalActiveCustomers}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">(Saat Ini)</p>
               </div>
               <div className="bg-teal-500/10 p-4 rounded-lg">
                   <p className="text-sm text-teal-400 font-semibold">Pelanggan Lunas</p>
                   <p className="text-xl sm:text-2xl font-bold text-white">
                     {totalPaidCustomers}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">(Saat Ini)</p>
               </div>
               <div className="bg-amber-500/10 p-4 rounded-lg">
                   <p className="text-sm text-amber-400 font-semibold">Pelanggan Belum Lunas</p>
                   <p className="text-xl sm:text-2xl font-bold text-white">
                     {totalUnpaidCustomers}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1">(Saat Ini)</p>
               </div>
           </div>
 

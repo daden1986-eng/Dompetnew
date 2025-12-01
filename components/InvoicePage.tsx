@@ -47,10 +47,10 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
         { id: 1, description: '', qty: 1, price: 0 }
     ]);
     const [invoiceDueDate, setInvoiceDueDate] = useState<string>(() => {
-        // Default to 24th of current/next month
+        // Default to 25th of current/next month
         const today = new Date();
-        let defaultDate = new Date(today.getFullYear(), today.getMonth(), 24);
-        if (today.getDate() > 24) {
+        let defaultDate = new Date(today.getFullYear(), today.getMonth(), 25);
+        if (today.getDate() > 25) {
             defaultDate.setMonth(defaultDate.getMonth() + 1);
         }
         return defaultDate.toISOString().split('T')[0];
@@ -147,8 +147,8 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
                 setRecipientPhone('');
                 setItems([{ id: Date.now(), description: '', qty: 1, price: 0 }]);
                 const today = new Date();
-                let defaultDate = new Date(today.getFullYear(), today.getMonth(), 24);
-                if (today.getDate() > 24) {
+                let defaultDate = new Date(today.getFullYear(), today.getMonth(), 25);
+                if (today.getDate() > 25) {
                     defaultDate.setMonth(defaultDate.getMonth() + 1);
                 }
                 setInvoiceDueDate(defaultDate.toISOString().split('T')[0]); // Reset to default
