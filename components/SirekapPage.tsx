@@ -138,8 +138,10 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
       });
     } else {
       const today = new Date();
-      let dueDate = new Date(today.getFullYear(), today.getMonth(), 25);
-      if (today.getDate() > 25) {
+      // Default to 24th of current month
+      let dueDate = new Date(today.getFullYear(), today.getMonth(), 24);
+      // If today is past the 24th, set to next month's 24th
+      if (today.getDate() > 24) {
           dueDate.setMonth(dueDate.getMonth() + 1);
       }
 
@@ -152,7 +154,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         harga: harga || '0',
         status: 'Belum Lunas',
         tunggakan: 0,
-        dueDate: dueDate.toISOString().split('T')[0], // Initial due date: 25th of current/next month
+        dueDate: dueDate.toISOString().split('T')[0], 
       };
       setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
       onNewCustomer(newCustomer);
@@ -255,7 +257,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
       icon: 'warning',
       showCancelButton: true,
       confirmButtonColor: '#d33',
-      cancelButtonColor: '#3085d6',
+      cancelButtonColor: '#d33',
       confirmButtonText: 'Ya, hapus!',
       cancelButtonText: 'Batal'
     }).then((result: any) => {
@@ -317,10 +319,10 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
 
         const updatedCustomers = customers.map(c => {
           if (c.id === customer.id) {
-            // Set next due date to 25th of the NEXT month after successful payment
+            // Set next due date to 24th of the NEXT month after successful payment
             const nextDueDate = new Date();
             nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-            nextDueDate.setDate(25);
+            nextDueDate.setDate(24);
             return { 
                 ...c, 
                 status: 'Lunas', 
@@ -381,7 +383,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
 
     Swal.fire({
       title: 'Mulai Siklus Tagihan Baru?',
-      text: "Pelanggan yang belum lunas akan diakumulasikan tunggakannya dan semua status direset ke 'Belum Lunas'. Tanggal jatuh tempo akan diperbarui ke tanggal 25 bulan berikutnya. Lanjutkan?",
+      text: "Pelanggan yang belum lunas akan diakumulasikan tunggakannya dan semua status direset ke 'Belum Lunas'. Tanggal jatuh tempo akan diperbarui ke tanggal 24 bulan ini. Lanjutkan?",
       icon: 'question',
       showCancelButton: true,
       confirmButtonColor: '#3085d6',
@@ -400,16 +402,16 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         const updatedCustomers = customers.map(c => {
             const newTunggakan = c.status === 'Belum Lunas' ? c.tunggakan + Number(c.harga) : c.tunggakan;
             
-            // Calculate next dueDate: 25th of the next month
+            // Calculate next dueDate: 24th of the CURRENT month (bulan yang sama)
             const today = new Date();
-            let nextDueDate = new Date(today.getFullYear(), today.getMonth() + 1, 25); // Always next month's 25th
+            let nextDueDate = new Date(today.getFullYear(), today.getMonth(), 24);
 
             return {
                 ...c,
                 // FIX: Use 'as const' to ensure TypeScript infers the literal type 'Belum Lunas' instead of 'string'.
                 status: 'Belum Lunas' as const,
                 tunggakan: newTunggakan,
-                dueDate: nextDueDate.toISOString().split('T')[0], // Advance to next month's 25th
+                dueDate: nextDueDate.toISOString().split('T')[0], // Set to 24th of current month
             };
         });
         setCustomers(updatedCustomers);
