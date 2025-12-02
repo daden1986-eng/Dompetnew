@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
+import { CompanyInfo } from '../App'; // Import CompanyInfo for type consistency
 
 declare const Swal: any;
 

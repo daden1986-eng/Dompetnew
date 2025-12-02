@@ -4,12 +4,14 @@ import UserIcon from './icons/UserIcon';
 import LockIcon from './icons/LockIcon';
 import EyeIcon from './icons/EyeIcon';
 import EyeOffIcon from './icons/EyeOffIcon';
+import { CompanyInfo } from '../App'; // Import CompanyInfo from App.tsx
 
 interface LoginPageProps {
   onLoginSuccess: (username: string) => void;
+  companyInfo: CompanyInfo; // Add companyInfo prop
 }
 
-const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
+const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, companyInfo }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -36,7 +38,16 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess }) => {
       <div className="absolute inset-0 bg-black opacity-50"></div>
       <div className="relative z-10 w-full max-w-md p-8 space-y-6 bg-white/10 backdrop-blur-lg rounded-2xl shadow-2xl">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-white tracking-wider">Selamat Datang</h1>
+          {companyInfo.logo ? (
+            <img 
+              src={companyInfo.logo} 
+              alt="Company Logo" 
+              className="mx-auto h-24 w-24 object-contain mb-4 rounded-full bg-white/20 p-2"
+            />
+          ) : (
+            <h1 className="text-4xl font-bold text-white tracking-wider mb-4">DompetKu</h1>
+          )}
+          <h1 className="text-3xl font-bold text-white tracking-wider">Selamat Datang</h1>
           <p className="mt-2 text-gray-300">Masuk untuk melanjutkan ke dasbor Anda</p>
         </div>
         

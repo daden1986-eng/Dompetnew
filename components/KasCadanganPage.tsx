@@ -1,6 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
+import { CompanyInfo } from '../App'; // Import CompanyInfo for type consistency
 
 declare const Swal: any;
 
@@ -99,7 +100,7 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
 
   const kasHistory = useMemo(() => {
       return financeHistory
-          .filter(entry => entry.deskripsi.toLowerCase().includes('kas cadangan'))
+          .filter(entry => entry.deskripsi.toLowerCase().includes('kas cadangan') || entry.deskripsi.toLowerCase().includes('ambil dari kas cadangan'))
           .sort((a, b) => new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime());
   }, [financeHistory]);
 

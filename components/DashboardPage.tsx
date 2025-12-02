@@ -1,14 +1,14 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
-import LaporanBulananPage from './LaporanBulananPage';
+import LaporanBulananPage, { ProfitShare } from './LaporanBulananPage'; // Import ProfitShare and LaporanBulananPage
 import InvoicePage, { InvoiceInitialData } from './InvoicePage';
 import KasCadanganPage from './KasCadanganPage';
-import VoucherPage from './VoucherPage'; // Import VoucherPage
-// FIX: Import ProfitShare to break circular dependency
-import { ProfitShare } from './LaporanBulananPage';
+import VoucherPage from './VoucherPage';
 import * as Recharts from 'recharts';
 import SettingsIcon from './icons/SettingsIcon';
-import TicketIcon from './icons/TicketIcon'; // Import TicketIcon
+import TicketIcon from './icons/TicketIcon';
+import { CompanyInfo, isLocalStorageAvailable } from '../App'; // Import CompanyInfo and isLocalStorageAvailable from App.tsx
 
 // Declare Swal to inform TypeScript about the global variable from the CDN script
 declare const Swal: any;
@@ -16,15 +16,7 @@ declare const Swal: any;
 // Destructure components from the Recharts namespace
 const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line } = Recharts;
 
-
-interface DashboardPageProps {
-  onLogout: () => void;
-  username: string;
-  companyInfo: CompanyInfo;
-  setCompanyInfo: React.Dispatch<React.SetStateAction<CompanyInfo>>;
-}
-
-// Interfaces moved from SirekapPage
+// Interfaces defined locally as they are heavily used here
 interface Customer {
   id: number;
   nama: string;
@@ -46,24 +38,20 @@ interface FinanceEntry {
   nominal: number;
 }
 
-export interface CompanyInfo {
-    name: string;
-    address: string;
-    phone: string;
-    logo: string | null;
-    telegramBotToken: string;
-    telegramChatId: string;
-    namaBank: string;
-    nomorRekening: string;
-    atasNama: string;
-    stampLogo: string | null; // Added stampLogo
+interface DashboardPageProps {
+  onLogout: () => void;
+  username: string;
+  companyInfo: CompanyInfo;
+  setCompanyInfo: React.Dispatch<React.SetStateAction<CompanyInfo>>;
 }
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
   const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher'>('dashboard');
   const [invoiceInitialData, setInvoiceInitialData] = useState<InvoiceInitialData | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string>('all'); // State for month filter
 
   const [customers, setCustomers] = useState<Customer[]>(() => {
+    if (!isLocalStorageAvailable()) return [];
     try {
         const saved = localStorage.getItem('sidompet_customers');
         return saved ? JSON.parse(saved) : [];
@@ -74,6 +62,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   });
 
   useEffect(() => {
+    if (!isLocalStorageAvailable()) return;
     try {
         localStorage.setItem('sidompet_customers', JSON.stringify(customers));
     } catch (e) {
@@ -82,6 +71,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   }, [customers]);
 
   const [financeHistory, setFinanceHistory] = useState<FinanceEntry[]>(() => {
+      if (!isLocalStorageAvailable()) return [];
       try {
           const saved = localStorage.getItem('sidompet_financeHistory');
           return saved ? JSON.parse(saved) : [];
@@ -92,6 +82,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   });
 
   useEffect(() => {
+      if (!isLocalStorageAvailable()) return;
       try {
           localStorage.setItem('sidompet_financeHistory', JSON.stringify(financeHistory));
       } catch (e) {
@@ -100,6 +91,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   }, [financeHistory]);
 
   const [profitSharingData, setProfitSharingData] = useState<ProfitShare[]>(() => {
+    if (!isLocalStorageAvailable()) return [];
     try {
         const saved = localStorage.getItem('sidompet_profitSharing');
         return saved ? JSON.parse(saved) : [];
@@ -110,6 +102,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   });
 
   useEffect(() => {
+      if (!isLocalStorageAvailable()) return;
       try {
           localStorage.setItem('sidompet_profitSharing', JSON.stringify(profitSharingData));
       } catch (e) {
@@ -118,6 +111,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   }, [profitSharingData]);
     
   const [kasCadangan, setKasCadangan] = useState<number>(() => {
+    if (!isLocalStorageAvailable()) return 0;
     try {
         const saved = localStorage.getItem('sidompet_kasCadangan');
         return saved ? JSON.parse(saved) : 0;
@@ -128,6 +122,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   });
 
   useEffect(() => {
+    if (!isLocalStorageAvailable()) return;
     try {
         localStorage.setItem('sidompet_kasCadangan', JSON.stringify(kasCadangan));
     } catch (e) {
@@ -620,6 +615,35 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     }
   };
 
+  // Extract unique month-year keys for filtering
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    financeHistory.forEach(entry => {
+      const date = new Date(entry.tanggal);
+      months.add(date.toLocaleString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
+    });
+    return ['all', ...Array.from(months).sort((a,b) => { // Sort chronologically
+      const [monthA, yearA] = a.split(' ');
+      const [monthB, yearB] = b.split(' ');
+      const dateA = new Date(Date.parse(`${monthA} 1, ${yearA}`));
+      const dateB = new Date(Date.parse(`${monthB} 1, ${yearB}`));
+      return dateA.getTime() - dateB.getTime();
+    }).reverse()]; // Newest first
+  }, [financeHistory]);
+
+
+  const filteredFinanceHistoryByMonth = useMemo(() => {
+    if (selectedMonth === 'all') {
+      return financeHistory;
+    }
+    return financeHistory.filter(entry => {
+      const entryDate = new Date(entry.tanggal);
+      const entryMonthYear = entryDate.toLocaleString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+      return entryMonthYear === selectedMonth;
+    });
+  }, [financeHistory, selectedMonth]);
+
+
   const renderFinancialVisualisation = () => {
     if (financeHistory.length === 0 && customers.length === 0) { // Check both finance and customers
       const capitalizedUsername = username.charAt(0).toUpperCase() + username.slice(1);
@@ -631,9 +655,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
       );
     }
     
-    // Calculate summary data
-    const pemasukanEntries = financeHistory.filter(e => e.kategori === 'Pemasukan');
-    const pengeluaranEntries = financeHistory.filter(e => e.kategori === 'Pengeluaran');
+    // Calculate summary data from filteredFinanceHistoryByMonth
+    const pemasukanEntries = filteredFinanceHistoryByMonth.filter(e => e.kategori === 'Pemasukan');
+    const pengeluaranEntries = filteredFinanceHistoryByMonth.filter(e => e.kategori === 'Pengeluaran');
 
     const totalPemasukan = pemasukanEntries.reduce((acc, e) => acc + e.nominal, 0);
     const totalPengeluaran = pengeluaranEntries.reduce((acc, e) => acc + e.nominal, 0);
@@ -653,7 +677,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
       .reduce((acc, e) => acc + e.nominal, 0);
     
     // Calculate voucher revenue specific
-    const totalVoucherRevenue = financeHistory
+    const totalVoucherRevenue = filteredFinanceHistoryByMonth
       .filter(e => e.kategori === 'Pemasukan' && e.deskripsi.toLowerCase().includes('voucher'))
       .reduce((acc, e) => acc + e.nominal, 0);
 
@@ -683,7 +707,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     const allIncomeCategories = new Set<string>();
     const allExpenseCategories = new Set<string>();
 
-    financeHistory.forEach(entry => {
+    filteredFinanceHistoryByMonth.forEach(entry => {
         const date = entry.tanggal;
         const category = getCategory(entry);
 
@@ -749,6 +773,19 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     return (
        <div className="bg-black/20 rounded-lg p-4 sm:p-8 w-full flex-grow">
           <h2 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">Ringkasan Keuangan & Pelanggan</h2>
+          {/* Month Filter */}
+          <div className="flex justify-center mb-6">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="px-4 py-2 rounded-lg bg-gray-700/50 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <option value="all">Semua Waktu</option>
+              {availableMonths.map(month => (
+                <option key={month} value={month}>{month}</option>
+              ))}
+            </select>
+          </div>
           {/* Summary Cards */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8 text-center">
               <div className="bg-green-500/10 p-4 rounded-lg">
@@ -769,8 +806,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
               </div>
               <div className="bg-sky-500/10 p-4 rounded-lg">
                   <p className="text-sm text-sky-400 font-semibold">Saldo Akhir</p>
-                  <p className={`text-xl sm:text-2xl font-bold ${saldoAkhir >= 0 ? 'text-white' : 'text-red-400'}`}>
-                    Rp {saldoAkhir.toLocaleString('id-ID')}
+                  <p className={`text-xl sm:text-2xl font-bold ${totalPemasukan - totalPengeluaran >= 0 ? 'text-white' : 'text-red-400'}`}>
+                    Rp {(totalPemasukan - totalPengeluaran).toLocaleString('id-ID')}
                   </p>
               </div>
               <div className="bg-slate-500/10 p-4 rounded-lg">
@@ -922,6 +959,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             setProfitSharingData={setProfitSharingData}
             kasCadangan={kasCadangan}
             onProfitShareProcessed={handleProfitShareNotification}
+            selectedMonth={selectedMonth} // Pass selectedMonth to LaporanBulananPage
           />
         ) : activePage === 'invoice' ? (
           <InvoicePage

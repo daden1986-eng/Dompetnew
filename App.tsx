@@ -1,12 +1,38 @@
 
 import React, { useState, useEffect } from 'react';
 import LoginPage from './components/LoginPage';
-import DashboardPage, { CompanyInfo } from './components/DashboardPage';
+import DashboardPage from './components/DashboardPage';
+
+// Define the CompanyInfo interface as the single source of truth
+export interface CompanyInfo {
+    name: string;
+    address: string;
+    phone: string;
+    logo: string | null;
+    telegramBotToken: string;
+    telegramChatId: string;
+    namaBank: string;
+    nomorRekening: string;
+    atasNama: string;
+    stampLogo: string | null;
+}
+
+// Utility function to check if localStorage is available and accessible
+export function isLocalStorageAvailable(): boolean {
+  try {
+    const testKey = '__test_localStorage__';
+    localStorage.setItem(testKey, testKey);
+    localStorage.removeItem(testKey);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
 
 const COMPANY_INFO_KEY = 'sidompet_companyInfo';
 
 const defaultCompanyInfo: CompanyInfo = {
-    name: 'Damar Global Network',
+    name: 'DompetKu',
     address: 'Jl. Internet Cepat No. 42, Jakarta',
     phone: '021-555-0123',
     logo: null,
@@ -15,19 +41,21 @@ const defaultCompanyInfo: CompanyInfo = {
     namaBank: '',
     nomorRekening: '',
     atasNama: '',
-    stampLogo: null, // Added stampLogo
+    stampLogo: null,
 };
 
 
 function App() {
   const [loggedInUser, setLoggedInUser] = useState<string | null>(null);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>(() => {
+    if (!isLocalStorageAvailable()) {
+      console.warn("localStorage tidak tersedia, menggunakan info perusahaan default.");
+      return defaultCompanyInfo;
+    }
     try {
         const saved = localStorage.getItem(COMPANY_INFO_KEY);
         if (saved) {
-            // Gabungkan data yang disimpan dengan default untuk menangani pembaruan skema dengan baik
             const parsed = JSON.parse(saved);
-            // Ensure defaults are used if saved values are empty (important for existing users)
             return { 
                 ...defaultCompanyInfo, 
                 ...parsed,
@@ -35,12 +63,15 @@ function App() {
         }
     } catch (error) {
         console.error("Gagal memuat info perusahaan dari localStorage, kembali ke default.", error);
-        // Jangan hapus item, mungkin bisa dipulihkan. Cukup gunakan default untuk sesi ini.
     }
     return defaultCompanyInfo;
   });
 
   useEffect(() => {
+    if (!isLocalStorageAvailable()) {
+      // localStorage not available, skip saving
+      return;
+    }
     try {
         localStorage.setItem(COMPANY_INFO_KEY, JSON.stringify(companyInfo));
     } catch (error) {
@@ -68,6 +99,7 @@ function App() {
       ) : (
         <LoginPage 
           onLoginSuccess={handleLoginSuccess} 
+          companyInfo={companyInfo} // Pass companyInfo to LoginPage
         />
       )}
       <footer className="fixed bottom-0 left-0 right-0 p-4 text-center text-gray-400 text-sm bg-gray-900/50 backdrop-blur-sm z-50">

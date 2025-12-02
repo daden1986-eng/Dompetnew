@@ -2,6 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import DownloadIcon from './icons/DownloadIcon';
+import { CompanyInfo } from '../App'; // Import CompanyInfo from App.tsx
 
 // Declare jsPDF from CDN. The autoTable plugin will extend the jsPDF instance.
 declare const jspdf: any;
@@ -22,14 +23,6 @@ interface FinanceEntry {
   nominal: number;
 }
 
-interface CompanyInfo {
-    name: string;
-    address: string;
-    phone: string;
-    logo: string | null;
-    stampLogo: string | null; // Added stampLogo
-}
-
 interface LaporanBulananPageProps {
   onBack: () => void;
   financeHistory: FinanceEntry[];
@@ -39,9 +32,10 @@ interface LaporanBulananPageProps {
   setProfitSharingData: React.Dispatch<React.SetStateAction<ProfitShare[]>>;
   kasCadangan: number;
   onProfitShareProcessed: (details: { total: number; members: number }) => void;
+  selectedMonth: string; // Add selectedMonth prop
 }
 
-const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, financeHistory, companyInfo, profitSharingData, setFinanceHistory, setProfitSharingData, kasCadangan, onProfitShareProcessed }) => {
+const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, financeHistory, companyInfo, profitSharingData, setFinanceHistory, setProfitSharingData, kasCadangan, onProfitShareProcessed, selectedMonth }) => {
   const [members, setMembers] = useState<string[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
 
@@ -63,8 +57,17 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
       }
     });
 
+    // Filter by selectedMonth if not 'all'
+    const filteredReportKeys = Object.keys(report).filter(key => {
+        if (selectedMonth === 'all') return true;
+        const [year, month] = key.split('-').map(Number);
+        const date = new Date(Date.UTC(year, month - 1, 1));
+        const displayMonth = date.toLocaleString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        return displayMonth === selectedMonth;
+    });
+
     // Sort keys chronologically (descending)
-    const sortedKeys = Object.keys(report).sort().reverse();
+    const sortedKeys = filteredReportKeys.sort().reverse();
 
     // Map to final format with display-friendly month name
     return sortedKeys.map(key => {
@@ -263,45 +266,55 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
     const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
     const totalPemasukan = pemasukanTunai + pemasukanTransfer;
-    const pengeluaranTunai = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
-    const pengeluaranTransfer = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
-    const totalPengeluaran = pengeluaranTunai + pengeluaranTransfer;
-    const saldoAkhirKeseluruhan = totalPemasukan - totalPengeluaran;
+    
+    const pengeluaranOperasional = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.deskripsi.toLowerCase().includes('bagi hasil') === false).reduce((sum, e) => sum + e.nominal, 0);
+    const pengeluaranBagiHasil = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.deskripsi.toLowerCase().includes('bagi hasil')).reduce((sum, e) => sum + e.nominal, 0);
+    const totalPengeluaran = pengeluaranOperasional + pengeluaranBagiHasil;
+
+    const saldoSebelumBagiHasil = totalPemasukan - pengeluaranOperasional;
+    const saldoAkhirSetelahBagiHasil = saldoSebelumBagiHasil - pengeluaranBagiHasil;
+
 
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.text('Rekapitulasi Total Transaksi', 15, finalY + 15);
 
     const summaryTableData = [
-        ['Pemasukan (Tunai)', pemasukanTunai.toLocaleString('id-ID')],
-        ['Pemasukan (Transfer)', pemasukanTransfer.toLocaleString('id-ID')],
         ['Total Pemasukan', totalPemasukan.toLocaleString('id-ID')],
-        ['Pengeluaran (Tunai)', pengeluaranTunai.toLocaleString('id-ID')],
-        ['Pengeluaran (Transfer)', pengeluaranTransfer.toLocaleString('id-ID')],
-        ['Total Pengeluaran', totalPengeluaran.toLocaleString('id-ID')],
-        ['Saldo Akhir Keseluruhan', saldoAkhirKeseluruhan.toLocaleString('id-ID')],
-        ['Kas Cadangan', kasCadangan.toLocaleString('id-ID')],
+        ['Total Pengeluaran Operasional', pengeluaranOperasional.toLocaleString('id-ID')],
+        [{content: 'Saldo Operasional (Dana Siap Bagi Hasil)', styles: {fillColor: [200, 250, 200], textColor: [0, 100, 0], fontStyle: 'bold'}}, {content: saldoSebelumBagiHasil.toLocaleString('id-ID'), styles: {fillColor: [200, 250, 200], textColor: [0, 100, 0], fontStyle: 'bold', halign: 'right'}}],
+        ['Total Pengeluaran Bagi Hasil', pengeluaranBagiHasil.toLocaleString('id-ID')],
+        [{content: 'Saldo Akhir (Setelah Bagi Hasil)', styles: {fillColor: [255, 255, 200], textColor: [150, 150, 0], fontStyle: 'bold'}}, {content: (saldoAkhirSetelahBagiHasil).toLocaleString('id-ID'), styles: {fillColor: [255, 255, 200], textColor: [150, 150, 0], fontStyle: 'bold', halign: 'right'}}],
+        [{content: 'Kas Cadangan (Dana Darurat/Simpanan)', styles: {fillColor: [200, 200, 250], textColor: [0, 0, 100], fontStyle: 'bold'}}, {content: kasCadangan.toLocaleString('id-ID'), styles: {fillColor: [200, 200, 250], textColor: [0, 0, 100], fontStyle: 'bold', halign: 'right'}}],
     ];
     
     (doc as any).autoTable({
-        head: [['Deskripsi', 'Jumlah (Rp)']],
         body: summaryTableData,
         startY: finalY + 20,
-        headStyles: { fillColor: [31, 41, 55] },
         theme: 'grid',
-        didDrawCell: (data: any) => {
-            if (data.section === 'body') {
-                data.cell.styles.halign = 'right';
-                // Make headers bold
-                if (data.row.index === 2 || data.row.index === 5 || data.row.index === 6 || data.row.index === 7) {
-                    data.cell.styles.fontStyle = 'bold';
-                }
+        styles: { fontSize: 10, cellPadding: 2, lineWidth: 0.1, lineColor: [200, 200, 200] },
+        columnStyles: {
+            0: { fontStyle: 'bold', cellWidth: 'auto' },
+            1: { halign: 'right', fontStyle: 'bold', cellWidth: 40 }
+        },
+        // Ensure no head is drawn for this custom table
+        head: [['', '']], 
+        didParseCell: (data: any) => {
+            // Apply specific styles if the cell object contains them
+            if (data.raw && typeof data.raw === 'object' && data.raw.styles) {
+                Object.assign(data.cell.styles, data.raw.styles);
+                data.cell.text = [data.raw.content]; // Ensure text is set
             }
         },
-        columnStyles: {
-            0: { halign: 'left', fontStyle: 'bold' }
+        // Manually adjust the first column's width to give more space for description
+        didDrawPage: (data: any) => {
+            if (data.pageNumber === 1) { // Assuming this table is on the first page
+                 // Increase width for the first column for better description visibility
+                data.table.columns[0].width = 110; 
+            }
         }
     });
+
     finalY = (doc as any).lastAutoTable.finalY;
 
     // Profit Sharing Table (if data exists)

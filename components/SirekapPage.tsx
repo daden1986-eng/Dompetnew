@@ -4,6 +4,7 @@ import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
 import DownloadIcon from './icons/DownloadIcon';
 import DocumentIcon from './icons/DocumentIcon';
+import { CompanyInfo } from '../App'; // Import CompanyInfo from App.tsx
 
 // Declare Swal to inform TypeScript about the global variable from the CDN script
 declare const Swal: any;
@@ -30,16 +31,6 @@ interface FinanceEntry {
   nominal: number;
 }
 
-interface CompanyInfo {
-    name: string;
-    address: string;
-    phone: string;
-    logo: string | null;
-    namaBank: string;
-    nomorRekening: string;
-    atasNama: string;
-}
-
 interface SirekapPageProps {
   onBack: () => void;
   customers: Customer[];
@@ -64,6 +55,14 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
   const [jenisLangganan, setJenisLangganan] = useState('PPPoE');
   const [alamat, setAlamat] = useState('');
   const [harga, setHarga] = useState('');
+  const [dueDateInput, setDueDateInput] = useState<string>(() => {
+    const today = new Date();
+    let defaultDate = new Date(today.getFullYear(), today.getMonth(), 24); // Default to 24th
+    if (today.getDate() > 24) { // If today is past the 24th, set to next month's 24th
+        defaultDate.setMonth(defaultDate.getMonth() + 1);
+    }
+    return defaultDate.toISOString().split('T')[0];
+  });
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
   // State for the new finance form
@@ -103,6 +102,12 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
     setJenisLangganan('PPPoE');
     setAlamat('');
     setHarga('');
+    const today = new Date();
+    let defaultDate = new Date(today.getFullYear(), today.getMonth(), 24); // Default to 24th
+    if (today.getDate() > 24) { // If today is past the 24th, set to next month's 24th
+        defaultDate.setMonth(defaultDate.getMonth() + 1);
+    }
+    setDueDateInput(defaultDate.toISOString().split('T')[0]);
     setEditingCustomer(null);
   };
 
@@ -121,7 +126,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         if (result.isConfirmed) {
           const updatedCustomers = customers.map(c =>
             c.id === editingCustomer.id
-              ? { ...c, nama, noHp, jenisLangganan, alamat, harga: harga || '0' }
+              ? { ...c, nama, noHp, jenisLangganan, alamat, harga: harga || '0', dueDate: dueDateInput }
               : c
           );
           setCustomers(updatedCustomers);
@@ -137,12 +142,6 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         }
       });
     } else {
-      const today = new Date();
-      let dueDate = new Date(today.getFullYear(), today.getMonth(), 25);
-      if (today.getDate() > 25) {
-          dueDate.setMonth(dueDate.getMonth() + 1);
-      }
-
       const newCustomer: Customer = {
         id: Date.now(),
         nama,
@@ -152,7 +151,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         harga: harga || '0',
         status: 'Belum Lunas',
         tunggakan: 0,
-        dueDate: dueDate.toISOString().split('T')[0], // Initial due date: 25th of current/next month
+        dueDate: dueDateInput, // Use dueDateInput for new customer
       };
       setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
       onNewCustomer(newCustomer);
@@ -245,6 +244,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
     setJenisLangganan(customer.jenisLangganan);
     setAlamat(customer.alamat);
     setHarga(customer.harga);
+    setDueDateInput(customer.dueDate); // Set dueDateInput when editing
     setActiveMenu('input');
   };
 
@@ -317,10 +317,10 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
 
         const updatedCustomers = customers.map(c => {
           if (c.id === customer.id) {
-            // Set next due date to 25th of the NEXT month after successful payment
+            // Set next due date to 24th of the NEXT month after successful payment
             const nextDueDate = new Date();
             nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-            nextDueDate.setDate(25);
+            nextDueDate.setDate(24);
             return { 
                 ...c, 
                 status: 'Lunas', 
@@ -381,7 +381,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
 
     Swal.fire({
       title: 'Mulai Siklus Tagihan Baru?',
-      text: "Pelanggan yang belum lunas akan diakumulasikan tunggakannya dan semua status direset ke 'Belum Lunas'. Tanggal jatuh tempo akan diperbarui ke tanggal 25 bulan berikutnya. Lanjutkan?",
+      text: "Pelanggan yang belum lunas akan diakumulasikan tunggakannya dan semua status direset ke 'Belum Lunas'. Tanggal jatuh tempo akan diperbarui ke tanggal 24 bulan yang sama. Lanjutkan?",
       icon: 'question',
       showCancelButton: true,
       confirmButtonColor: '#3085d6',
@@ -400,16 +400,15 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         const updatedCustomers = customers.map(c => {
             const newTunggakan = c.status === 'Belum Lunas' ? c.tunggakan + Number(c.harga) : c.tunggakan;
             
-            // Calculate next dueDate: 25th of the next month
+            // Calculate next dueDate: 24th of the CURRENT month
             const today = new Date();
-            let nextDueDate = new Date(today.getFullYear(), today.getMonth() + 1, 25); // Always next month's 25th
+            const currentMonthDueDate = new Date(today.getFullYear(), today.getMonth(), 24); 
 
             return {
                 ...c,
-                // FIX: Use 'as const' to ensure TypeScript infers the literal type 'Belum Lunas' instead of 'string'.
                 status: 'Belum Lunas' as const,
                 tunggakan: newTunggakan,
-                dueDate: nextDueDate.toISOString().split('T')[0], // Advance to next month's 25th
+                dueDate: currentMonthDueDate.toISOString().split('T')[0], // Set to current month's 24th
             };
         });
         setCustomers(updatedCustomers);
@@ -1198,6 +1197,17 @@ ${companyInfo.name}`
                   required
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
                   placeholder="Contoh: 150000"
+                />
+              </div>
+              <div>
+                <label htmlFor="dueDate" className="block text-sm font-medium text-gray-300 mb-1">Tanggal Jatuh Tempo</label>
+                <input
+                  type="date"
+                  id="dueDate"
+                  value={dueDateInput}
+                  onChange={(e) => setDueDateInput(e.target.value)}
+                  required
+                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
                 />
               </div>
               <div className="pt-4">

@@ -3,20 +3,10 @@ import React, { useState, useEffect } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import DownloadIcon from './icons/DownloadIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
+import { CompanyInfo, isLocalStorageAvailable } from '../App'; // Import CompanyInfo and isLocalStorageAvailable from App.tsx
 
 declare const jspdf: any;
 declare const Swal: any;
-
-interface CompanyInfo {
-    name: string;
-    address: string;
-    phone: string;
-    logo: string | null;
-    namaBank: string;
-    nomorRekening: string;
-    atasNama: string;
-    stampLogo: string | null; // Added stampLogo
-}
 
 interface InvoiceItem {
     id: number;
@@ -47,10 +37,10 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
         { id: 1, description: '', qty: 1, price: 0 }
     ]);
     const [invoiceDueDate, setInvoiceDueDate] = useState<string>(() => {
-        // Default to 25th of current/next month
+        // Default to 24th of current/next month
         const today = new Date();
-        let defaultDate = new Date(today.getFullYear(), today.getMonth(), 25);
-        if (today.getDate() > 25) {
+        let defaultDate = new Date(today.getFullYear(), today.getMonth(), 24);
+        if (today.getDate() > 24) {
             defaultDate.setMonth(defaultDate.getMonth() + 1);
         }
         return defaultDate.toISOString().split('T')[0];
@@ -66,6 +56,7 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
                 setInvoiceDueDate(initialData.invoiceDueDate);
             }
         } else {
+            if (!isLocalStorageAvailable()) return;
             try {
                 const savedDraft = localStorage.getItem(DRAFT_KEY);
                 if (savedDraft) {
@@ -87,6 +78,7 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
 
     // Save draft to localStorage whenever it changes
     useEffect(() => {
+        if (!isLocalStorageAvailable()) return;
         const draft = {
             recipient,
             recipientPhone,
@@ -147,12 +139,14 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
                 setRecipientPhone('');
                 setItems([{ id: Date.now(), description: '', qty: 1, price: 0 }]);
                 const today = new Date();
-                let defaultDate = new Date(today.getFullYear(), today.getMonth(), 25);
-                if (today.getDate() > 25) {
+                let defaultDate = new Date(today.getFullYear(), today.getMonth(), 24);
+                if (today.getDate() > 24) {
                     defaultDate.setMonth(defaultDate.getMonth() + 1);
                 }
                 setInvoiceDueDate(defaultDate.toISOString().split('T')[0]); // Reset to default
-                localStorage.removeItem(DRAFT_KEY);
+                if (isLocalStorageAvailable()) {
+                    localStorage.removeItem(DRAFT_KEY);
+                }
             }
         });
     };
