@@ -1,51 +1,52 @@
 
-
 import React, { useState } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
 import DownloadIcon from './icons/DownloadIcon';
 import DocumentIcon from './icons/DocumentIcon';
-import { CompanyInfo } from '../App';
-import { Customer, FinanceEntry } from './DashboardPage'; // Import interfaces from DashboardPage
-import Swal from 'sweetalert2'; // Import Swal for consistent module loading
+import { CompanyInfo } from '../App'; // Import CompanyInfo from App.tsx
 
-// Declare jspdf to inform TypeScript about the global variable from the CDN script
-// Removed declare const jspdf: any;
+// Declare Swal to inform TypeScript about the global variable from the CDN script
+declare const Swal: any;
+declare const jspdf: any;
+
+interface Customer {
+  id: number;
+  nama: string;
+  noHp: string;
+  jenisLangganan: string;
+  alamat: string;
+  harga: string;
+  status: 'Lunas' | 'Belum Lunas';
+  tunggakan: number;
+  dueDate: string; // Added dueDate: YYYY-MM-DD
+}
+
+interface FinanceEntry {
+  id: number;
+  deskripsi: string;
+  tanggal: string;
+  kategori: string;
+  metode: string;
+  nominal: number;
+}
 
 interface SirekapPageProps {
   onBack: () => void;
   customers: Customer[];
-  // setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>; // No longer directly used
+  setCustomers: React.Dispatch<React.SetStateAction<Customer[]>>;
   financeHistory: FinanceEntry[];
-  // setFinanceHistory: React.Dispatch<React.SetStateAction<FinanceEntry[]>>; // No longer directly used
+  setFinanceHistory: React.Dispatch<React.SetStateAction<FinanceEntry[]>>;
   onPaymentSuccess: (customer: Customer, amount: number) => void;
   onNewCustomer: (customer: Customer) => void;
   onNewFinanceEntry: (entry: FinanceEntry) => void;
   companyInfo: CompanyInfo;
   onGenerateInvoice: (customer: Customer) => void;
-  // New props for Supabase interaction
-  onAddUpdateCustomer: (customer: Omit<Customer, 'user_id'> & {id?: number}) => Promise<Customer>;
-  onDeleteCustomer: (id: number) => Promise<void>;
-  onAddUpdateFinanceEntry: (entry: Omit<FinanceEntry, 'user_id'> & {id?: number}) => Promise<FinanceEntry>;
-  onDeleteFinanceEntry: (id: number) => Promise<void>;
-  userId: string;
 }
 
-const SirekapPage: React.FC<SirekapPageProps> = ({ 
-  onBack, 
-  customers, 
-  financeHistory, 
-  onPaymentSuccess, 
-  onNewCustomer, 
-  onNewFinanceEntry, 
-  companyInfo, 
-  onGenerateInvoice,
-  onAddUpdateCustomer,
-  onDeleteCustomer,
-  onAddUpdateFinanceEntry,
-  onDeleteFinanceEntry,
-  userId,
-}) => {
+
+
+const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustomers, financeHistory, setFinanceHistory, onPaymentSuccess, onNewCustomer, onNewFinanceEntry, companyInfo, onGenerateInvoice }) => {
   const [activeMenu, setActiveMenu] = useState('daftar'); // 'daftar', 'input', 'keuangan', or 'riwayat'
   
   // State for the new customer form
@@ -110,71 +111,59 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
     setEditingCustomer(null);
   };
 
-  const handleCustomerFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCustomerFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    try {
-        if (editingCustomer) {
-            await Swal.fire({
-                title: 'Perbarui data pelanggan ini?',
-                icon: 'question',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Ya, perbarui',
-                cancelButtonText: 'Batal',
-            }).then(async (result: any) => {
-                if (result.isConfirmed) {
-                    const updatedCustomer = { 
-                        ...editingCustomer, 
-                        nama, noHp, jenisLangganan, alamat, 
-                        harga: harga || '0', 
-                        dueDate: dueDateInput,
-                        user_id: userId, // Ensure user_id is passed for consistency
-                    };
-                    await onAddUpdateCustomer(updatedCustomer);
-                    Swal.fire({
-                        title: 'Berhasil!',
-                        text: 'Data pelanggan berhasil diperbarui.',
-                        icon: 'success',
-                        confirmButtonColor: '#3085d6',
-                    });
-                    resetCustomerForm();
-                    setActiveMenu('daftar');
-                    setIsListVisible(true);
-                }
-            });
-        } else {
-            const newCustomer = {
-                nama,
-                noHp,
-                jenisLangganan,
-                alamat,
-                harga: harga || '0',
-                status: 'Belum Lunas' as const,
-                tunggakan: 0,
-                dueDate: dueDateInput,
-                user_id: userId, // Set user_id for new customer
-            };
-            const addedCustomer = await onAddUpdateCustomer(newCustomer);
-            onNewCustomer(addedCustomer); // Notify dashboard
-            Swal.fire({
-                title: 'Berhasil!',
-                text: 'Pelanggan baru berhasil ditambahkan.',
-                icon: 'success',
-                confirmButtonColor: '#3085d6',
-            });
-            resetCustomerForm();
-            setActiveMenu('daftar');
-            setIsListVisible(true);
+    if (editingCustomer) {
+      Swal.fire({
+        title: 'Perbarui data pelanggan ini?',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonColor: '#3085d6',
+        cancelButtonColor: '#d33',
+        confirmButtonText: 'Ya, perbarui',
+        cancelButtonText: 'Batal',
+      }).then((result: any) => {
+        if (result.isConfirmed) {
+          const updatedCustomers = customers.map(c =>
+            c.id === editingCustomer.id
+              ? { ...c, nama, noHp, jenisLangganan, alamat, harga: harga || '0', dueDate: dueDateInput }
+              : c
+          );
+          setCustomers(updatedCustomers);
+          Swal.fire({
+            title: 'Berhasil!',
+            text: 'Data pelanggan berhasil diperbarui.',
+            icon: 'success',
+            confirmButtonColor: '#3085d6',
+          });
+          resetCustomerForm();
+          setActiveMenu('daftar');
+          setIsListVisible(true);
         }
-    } catch (error: any) {
-        console.error("Error saving customer:", error.message);
-        Swal.fire({
-            title: 'Error!',
-            text: `Gagal menyimpan data pelanggan: ${error.message}`,
-            icon: 'error',
-            confirmButtonColor: '#d33',
-        });
+      });
+    } else {
+      const newCustomer: Customer = {
+        id: Date.now(),
+        nama,
+        noHp,
+        jenisLangganan,
+        alamat,
+        harga: harga || '0',
+        status: 'Belum Lunas',
+        tunggakan: 0,
+        dueDate: dueDateInput, // Use dueDateInput for new customer
+      };
+      setCustomers(prevCustomers => [...prevCustomers, newCustomer]);
+      onNewCustomer(newCustomer);
+      Swal.fire({
+        title: 'Berhasil!',
+        text: 'Pelanggan baru berhasil ditambahkan.',
+        icon: 'success',
+        confirmButtonColor: '#3085d6',
+      });
+      resetCustomerForm();
+      setActiveMenu('daftar');
+      setIsListVisible(true);
     }
   };
   
@@ -187,43 +176,33 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
     setEditingEntry(null);
   };
 
-  const handleFinanceFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleFinanceFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    try {
-        const nominalValue = Number(nominal);
-        if (editingEntry) {
-            const updatedEntry = {
-                ...editingEntry,
-                deskripsi, tanggal, kategori, metode,
-                nominal: nominalValue,
-                user_id: userId, // Ensure user_id is passed for consistency
-            };
-            await onAddUpdateFinanceEntry(updatedEntry);
-            Swal.fire('Berhasil!', 'Catatan keuangan berhasil diperbarui.', 'success');
-        } else {
-            const newFinanceEntry = {
-                deskripsi,
-                tanggal,
-                kategori,
-                metode,
-                nominal: nominalValue,
-                user_id: userId, // Set user_id for new entry
-            };
-            const addedEntry = await onAddUpdateFinanceEntry(newFinanceEntry);
-            onNewFinanceEntry(addedEntry); // Notify dashboard
-            Swal.fire('Berhasil!', 'Catatan keuangan berhasil ditambahkan.', 'success');
-        }
-        resetFinanceForm();
-        setActiveMenu('riwayat');
-    } catch (error: any) {
-        console.error("Error saving finance entry:", error.message);
-        Swal.fire({
-            title: 'Error!',
-            text: `Gagal menyimpan catatan keuangan: ${error.message}`,
-            icon: 'error',
-            confirmButtonColor: '#d33',
-        });
+    
+    if (editingEntry) {
+        const updatedHistory = financeHistory.map(entry => 
+            entry.id === editingEntry.id 
+            ? { ...entry, deskripsi, tanggal, kategori, metode, nominal: Number(nominal) } 
+            : entry
+        );
+        setFinanceHistory(updatedHistory);
+        Swal.fire('Berhasil!', 'Catatan keuangan berhasil diperbarui.', 'success');
+    } else {
+        const newFinanceEntry: FinanceEntry = {
+            id: Date.now(),
+            deskripsi,
+            tanggal,
+            kategori,
+            metode,
+            nominal: Number(nominal),
+        };
+        setFinanceHistory(prevHistory => [...prevHistory, newFinanceEntry]);
+        onNewFinanceEntry(newFinanceEntry);
+        Swal.fire('Berhasil!', 'Catatan keuangan berhasil ditambahkan.', 'success');
     }
+
+    resetFinanceForm();
+    setActiveMenu('riwayat');
   };
 
   const handleStartEdit = (entry: FinanceEntry) => {
@@ -236,8 +215,8 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
     setActiveMenu('keuangan');
   };
 
-  const handleDeleteEntry = async (id: number) => {
-    await Swal.fire({
+  const handleDeleteEntry = (id: number) => {
+    Swal.fire({
       title: 'Apakah Anda yakin?',
       text: "Anda tidak akan dapat mengembalikan ini!",
       icon: 'warning',
@@ -246,26 +225,16 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
       cancelButtonColor: '#d33',
       confirmButtonText: 'Ya, hapus!',
       cancelButtonText: 'Batal'
-    }).then(async (result: any) => {
+    }).then((result: any) => {
       if (result.isConfirmed) {
-        try {
-            await onDeleteFinanceEntry(id);
-            Swal.fire(
-                'Dihapus!',
-                'Catatan keuangan telah dihapus.',
-                'success'
-            );
-        } catch (error: any) {
-            console.error("Error deleting finance entry:", error.message);
-            Swal.fire({
-                title: 'Error!',
-                text: `Gagal menghapus catatan keuangan: ${error.message}`,
-                icon: 'error',
-                confirmButtonColor: '#d33',
-            });
-        }
+        setFinanceHistory(prevHistory => prevHistory.filter(entry => entry.id !== id));
+        Swal.fire(
+          'Dihapus!',
+          'Catatan keuangan telah dihapus.',
+          'success'
+        )
       }
-    });
+    })
   };
 
   const handleStartEditCustomer = (customer: Customer) => {
@@ -279,8 +248,8 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
     setActiveMenu('input');
   };
 
-  const handleDeleteCustomer = async (id: number) => {
-    await Swal.fire({
+  const handleDeleteCustomer = (id: number) => {
+    Swal.fire({
       title: 'Apakah Anda yakin?',
       text: "Data pelanggan akan dihapus secara permanen!",
       icon: 'warning',
@@ -289,34 +258,24 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
       cancelButtonColor: '#3085d6',
       confirmButtonText: 'Ya, hapus!',
       cancelButtonText: 'Batal'
-    }).then(async (result: any) => {
+    }).then((result: any) => {
       if (result.isConfirmed) {
-        try {
-            await onDeleteCustomer(id);
-            Swal.fire(
-                'Dihapus!',
-                'Data pelanggan telah berhasil dihapus.',
-                'success'
-            );
-        } catch (error: any) {
-            console.error("Error deleting customer:", error.message);
-            Swal.fire({
-                title: 'Error!',
-                text: `Gagal menghapus data pelanggan: ${error.message}`,
-                icon: 'error',
-                confirmButtonColor: '#d33',
-            });
-        }
+        setCustomers(prevCustomers => prevCustomers.filter(c => c.id !== id));
+        Swal.fire(
+          'Dihapus!',
+          'Data pelanggan telah berhasil dihapus.',
+          'success'
+        )
       }
-    });
+    })
   };
 
-  const handlePayment = async (customer: Customer) => {
+  const handlePayment = (customer: Customer) => {
     if (customer.status === 'Lunas') return;
 
     const totalTagihan = Number(customer.harga) + customer.tunggakan;
 
-    await Swal.fire({
+    Swal.fire({
       title: 'Pilih Metode Pembayaran',
       html: `Total tagihan untuk <strong>${customer.nama}</strong> adalah <strong>Rp ${totalTagihan.toLocaleString('id-ID')}</strong>.`,
       input: 'radio',
@@ -342,80 +301,75 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
           return 'Anda harus memilih metode pembayaran!'
         }
       }
-    }).then(async (result: any) => {
+    }).then((result: any) => {
       if (result.isConfirmed && result.value) {
         const metodePembayaran = result.value;
 
-        try {
-            const newPaymentEntry = {
-                deskripsi: `Pembayaran langganan - ${customer.nama}`,
-                tanggal: new Date().toISOString().split('T')[0],
-                kategori: 'Pemasukan' as const,
-                metode: metodePembayaran,
-                nominal: totalTagihan,
-                user_id: userId,
-            };
-            await onAddUpdateFinanceEntry(newPaymentEntry);
+        const newPaymentEntry: FinanceEntry = {
+          id: Date.now(),
+          deskripsi: `Pembayaran langganan - ${customer.nama}`,
+          tanggal: new Date().toISOString().split('T')[0],
+          kategori: 'Pemasukan',
+          metode: metodePembayaran,
+          nominal: totalTagihan,
+        };
+        setFinanceHistory(prevHistory => [...prevHistory, newPaymentEntry]);
 
+        const updatedCustomers = customers.map(c => {
+          if (c.id === customer.id) {
+            // Set next due date to 24th of the NEXT month after successful payment
             const nextDueDate = new Date();
             nextDueDate.setMonth(nextDueDate.getMonth() + 1);
             nextDueDate.setDate(24);
-            const updatedCustomer = { 
-                ...customer, 
-                status: 'Lunas' as const, 
+            return { 
+                ...c, 
+                status: 'Lunas', 
                 tunggakan: 0, 
-                dueDate: nextDueDate.toISOString().split('T')[0],
-                user_id: userId,
+                dueDate: nextDueDate.toISOString().split('T')[0] 
             };
-            await onAddUpdateCustomer(updatedCustomer);
-            onPaymentSuccess(customer, totalTagihan);
+          }
+          return c;
+        });
+        setCustomers(updatedCustomers);
+        onPaymentSuccess(customer, totalTagihan);
 
+        Swal.fire({
+          icon: 'success',
+          title: 'Pembayaran Berhasil',
+          text: `Pembayaran untuk ${customer.nama} sebesar Rp ${totalTagihan.toLocaleString('id-ID')} (${metodePembayaran}) berhasil dicatat.`,
+           customClass: {
+              popup: '!bg-gray-800 !text-white !rounded-lg',
+              title: '!text-white',
+              confirmButton: '!bg-blue-600 hover:!bg-blue-700',
+           }
+        }).then(() => {
             Swal.fire({
-                icon: 'success',
-                title: 'Pembayaran Berhasil',
-                text: `Pembayaran untuk ${customer.nama} sebesar Rp ${totalTagihan.toLocaleString('id-ID')} (${metodePembayaran}) berhasil dicatat.`,
+                title: 'Kirim Notifikasi Lunas?',
+                text: `Kirim pemberitahuan pembayaran lunas ke ${customer.nama} melalui WhatsApp?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Ya, Kirim Notifikasi',
+                cancelButtonText: 'Jangan Kirim',
+                confirmButtonColor: '#25D366',
+                cancelButtonColor: '#6b7280',
                 customClass: {
                     popup: '!bg-gray-800 !text-white !rounded-lg',
                     title: '!text-white',
-                    confirmButton: '!bg-blue-600 hover:!bg-blue-700',
+                    htmlContainer: '!text-gray-300',
+                    confirmButton: '!bg-green-600 hover:!bg-green-700',
+                    cancelButton: '!bg-gray-600 hover:!bg-gray-700',
+                },
+            }).then((waResult: any) => {
+                if (waResult.isConfirmed) {
+                    handleSendPaymentConfirmationWhatsApp(customer, totalTagihan);
                 }
-            }).then(() => {
-                Swal.fire({
-                    title: 'Kirim Notifikasi Lunas?',
-                    text: `Kirim pemberitahuan pembayaran lunas ke ${customer.nama} melalui WhatsApp?`,
-                    icon: 'question',
-                    showCancelButton: true,
-                    confirmButtonText: 'Ya, Kirim Notifikasi',
-                    cancelButtonText: 'Jangan Kirim',
-                    confirmButtonColor: '#25D366',
-                    cancelButtonColor: '#6b7280',
-                    customClass: {
-                        popup: '!bg-gray-800 !text-white !rounded-lg',
-                        title: '!text-white',
-                        htmlContainer: '!text-gray-300',
-                        confirmButton: '!bg-green-600 hover:!bg-green-700',
-                        cancelButton: '!bg-gray-600 hover:!bg-gray-700',
-                    },
-                }).then((waResult: any) => {
-                    if (waResult.isConfirmed) {
-                        handleSendPaymentConfirmationWhatsApp(customer, totalTagihan);
-                    }
-                });
             });
-        } catch (error: any) {
-            console.error("Error processing payment:", error.message);
-            Swal.fire({
-                title: 'Error!',
-                text: `Gagal memproses pembayaran: ${error.message}`,
-                icon: 'error',
-                confirmButtonColor: '#d33',
-            });
-        }
+        });
       }
     });
   };
   
-  const handleNewBillingCycle = async () => {
+  const handleNewBillingCycle = () => {
     if (customers.length === 0) {
         Swal.fire({
           icon: 'error',
@@ -425,7 +379,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
         return;
     }
 
-    await Swal.fire({
+    Swal.fire({
       title: 'Mulai Siklus Tagihan Baru?',
       text: "Pelanggan yang belum lunas akan diakumulasikan tunggakannya dan semua status direset ke 'Belum Lunas'. Tanggal jatuh tempo akan diperbarui ke tanggal 24 bulan yang sama. Lanjutkan?",
       icon: 'question',
@@ -441,42 +395,30 @@ const SirekapPage: React.FC<SirekapPageProps> = ({
         confirmButton: '!bg-blue-600 hover:!bg-blue-700',
         cancelButton: '!bg-gray-600 hover:!bg-gray-700',
       },
-    }).then(async (result: any) => {
+    }).then((result: any) => {
       if (result.isConfirmed) {
-        try {
-            const updatedCustomersPromises = customers.map(c => {
-                const newTunggakan = c.status === 'Belum Lunas' ? c.tunggakan + Number(c.harga) : c.tunggakan;
-                
-                const today = new Date();
-                const currentMonthDueDate = new Date(today.getFullYear(), today.getMonth(), 24); 
+        const updatedCustomers = customers.map(c => {
+            const newTunggakan = c.status === 'Belum Lunas' ? c.tunggakan + Number(c.harga) : c.tunggakan;
+            
+            // Calculate next dueDate: 24th of the CURRENT month
+            const today = new Date();
+            const currentMonthDueDate = new Date(today.getFullYear(), today.getMonth(), 24); 
 
-                const updatedCustomer = {
-                    ...c,
-                    status: 'Belum Lunas' as const,
-                    tunggakan: newTunggakan,
-                    dueDate: currentMonthDueDate.toISOString().split('T')[0],
-                    user_id: userId,
-                };
-                return onAddUpdateCustomer(updatedCustomer); // Use onAddUpdateCustomer for update
-            });
-            await Promise.all(updatedCustomersPromises); // Wait for all updates to complete
-
-            Swal.fire(
-              'Berhasil!',
-              'Siklus tagihan baru telah dimulai. Semua status pelanggan direset menjadi "Belum Lunas" dan tanggal jatuh tempo diperbarui.',
-              'success'
-            );
-        } catch (error: any) {
-            console.error("Error starting new billing cycle:", error.message);
-            Swal.fire({
-                title: 'Error!',
-                text: `Gagal memulai siklus tagihan baru: ${error.message}`,
-                icon: 'error',
-                confirmButtonColor: '#d33',
-            });
-        }
+            return {
+                ...c,
+                status: 'Belum Lunas' as const,
+                tunggakan: newTunggakan,
+                dueDate: currentMonthDueDate.toISOString().split('T')[0], // Set to current month's 24th
+            };
+        });
+        setCustomers(updatedCustomers);
+        Swal.fire(
+          'Berhasil!',
+          'Siklus tagihan baru telah dimulai. Semua status pelanggan direset menjadi "Belum Lunas" dan tanggal jatuh tempo diperbarui.',
+          'success'
+        );
       }
-    });
+    })
   };
     
   const handleSendWhatsApp = (customer: Customer) => {
@@ -565,7 +507,7 @@ ${companyInfo.name}`
     }
 
     try {
-        const { jsPDF } = (window as any).jspdf; // Use window.jspdf
+        const { jsPDF } = jspdf;
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
 
@@ -671,8 +613,6 @@ ${companyInfo.name}`
     return dateMatch && searchMatch;
   });
 
-  // Fix: The previous comment indicated a syntax error.
-  // The root `return` of `renderCustomerList` should be a single JSX element or `React.Fragment`.
   const renderCustomerList = () => {
     if (customers.length === 0) {
       return (
@@ -764,8 +704,8 @@ ${companyInfo.name}`
           </div>
         );
       })}
-      </div>
-    );
+    </div>
+    )
   }
 
   const renderCustomerTable = () => {
@@ -856,8 +796,6 @@ ${companyInfo.name}`
     );
   }
 
-  // Fix: Removed the misplaced `</main>` and `</div>` tags that were incorrectly closing the parent component's JSX
-  // within this function's return statement.
   const renderFinanceHistory = () => {
     if (financeHistory.length === 0) {
         return (
@@ -897,7 +835,7 @@ ${companyInfo.name}`
     const saldoKeseluruhan = totalPemasukan - totalPengeluaran;
 
     return (
-      <React.Fragment>
+      <>
         {/* Filter Section */}
         <div className="flex flex-col sm:flex-row flex-wrap gap-4 mb-6 p-4 bg-white/5 rounded-lg items-end">
             <div className="flex-grow w-full sm:w-auto" style={{ minWidth: '200px' }}>
@@ -942,7 +880,7 @@ ${companyInfo.name}`
         </div>
         
         {isHistoryVisible && (
-          <React.Fragment>
+          <>
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <div className="bg-green-500/10 p-4 rounded-lg">
@@ -974,7 +912,7 @@ ${companyInfo.name}`
                 <p>Tidak ada data transaksi yang cocok dengan filter tanggal Anda.</p>
               </div>
             ) : (
-              <React.Fragment>
+              <>
                 {/* Mobile Card View */}
                 <div className="space-y-4 md:hidden">
                   {filteredFinanceHistory.map(entry => (
@@ -1042,13 +980,13 @@ ${companyInfo.name}`
                       </tbody>
                   </table>
               </div>
-            </React.Fragment>
+            </>
             )}
-          </React.Fragment>
+          </>
         )}
-      </React.Fragment>
+      </>
     );
-  };
+  }
 
   return (
     <div className="flex-grow flex flex-col">
@@ -1062,96 +1000,142 @@ ${companyInfo.name}`
           <span>Kembali</span>
         </button>
       </div>
-      
-      <main className="flex-grow flex flex-col bg-black/20 rounded-lg p-6 sm:p-8 space-y-8">
+
+      {/* Menu Section */}
+      <div className="mb-8 overflow-x-auto">
+        <nav>
+          <ul className="flex flex-nowrap sm:flex-wrap gap-x-4 sm:gap-x-6 gap-y-2">
+            <li>
+              <button
+                onClick={() => setActiveMenu('daftar')}
+                className={`text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 whitespace-nowrap ${
+                  activeMenu === 'daftar' ? 'border-b-2 border-sky-400' : 'border-b-2 border-transparent'
+                }`}>
+                Daftar Pelanggan
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => {
+                  if (editingCustomer) resetCustomerForm();
+                  setActiveMenu('input');
+                }}
+                className={`text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 whitespace-nowrap ${
+                  activeMenu === 'input' ? 'border-b-2 border-sky-400' : 'border-b-2 border-transparent'
+                }`}>
+                Input Pelanggan
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => {
+                  if (editingEntry) setEditingEntry(null); // Reset if switching away from edit
+                  setActiveMenu('keuangan');
+                }}
+                className={`text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 whitespace-nowrap ${
+                  activeMenu === 'keuangan' ? 'border-b-2 border-sky-400' : 'border-b-2 border-transparent'
+                }`}>
+                Catatan Keuangan
+              </button>
+            </li>
+            <li>
+              <button
+                onClick={() => setActiveMenu('riwayat')}
+                className={`text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 whitespace-nowrap ${
+                  activeMenu === 'riwayat' ? 'border-b-2 border-sky-400' : 'border-b-2 border-transparent'
+                }`}>
+                Riwayat Transaksi
+              </button>
+            </li>
+          </ul>
+        </nav>
+      </div>
+
+      <main className="flex-grow flex flex-col bg-black/20 rounded-lg p-4 sm:p-8">
         {activeMenu === 'daftar' && (
-          <React.Fragment>
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">Rekap Daftar Pelanggan</h2>
+            
             {/* Filter Section */}
             <div className="flex flex-col sm:flex-row flex-wrap gap-4 mb-6 p-4 bg-white/5 rounded-lg items-end">
-              <div className="flex-grow w-full sm:w-auto" style={{ minWidth: '150px' }}>
-                <label htmlFor="searchCustomer" className="block text-sm font-medium text-gray-400 mb-1">Cari Pelanggan</label>
+              <div className="w-full sm:flex-grow">
+                <label htmlFor="customerSearch" className="block text-sm font-medium text-gray-400 mb-1">Cari Pelanggan</label>
                 <input
+                  id="customerSearch"
                   type="text"
-                  id="searchCustomer"
-                  placeholder="Nama atau No. HP..."
+                  placeholder="Cari berdasarkan nama..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
                 />
               </div>
-              <div className="flex-grow w-full sm:w-auto">
-                <label htmlFor="filterJenisLangganan" className="block text-sm font-medium text-gray-400 mb-1">Jenis Langganan</label>
+              <div className="w-full sm:w-auto">
+                <label htmlFor="customerFilterJenis" className="block text-sm font-medium text-gray-400 mb-1">Jenis Langganan</label>
                 <select
-                  id="filterJenisLangganan"
+                  id="customerFilterJenis"
                   value={filterJenisLangganan}
                   onChange={(e) => setFilterJenisLangganan(e.target.value)}
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                  className="w-full pl-3 pr-8 py-2 text-white bg-gray-800/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
                 >
-                  <option>Semua</option>
-                  <option>PPPoE</option>
-                  <option>Hotspot</option>
-                  <option>Dedicated</option>
-                </select>
-              </div>
-              <div className="flex-grow w-full sm:w-auto">
-                <label htmlFor="filterStatus" className="block text-sm font-medium text-gray-400 mb-1">Status Pembayaran</label>
-                <select
-                  id="filterStatus"
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
-                >
-                  <option>Semua</option>
-                  <option>Lunas</option>
-                  <option>Belum Lunas</option>
+                  <option value="Semua" className="bg-gray-800">Semua Jenis</option>
+                  <option value="PPPoE" className="bg-gray-800">PPPoE</option>
+                  <option value="Static" className="bg-gray-800">Static</option>
+                  <option value="Hotspot" className="bg-gray-800">Hotspot</option>
+                  <option value="Mitra Voucher" className="bg-gray-800">Mitra Voucher</option>
                 </select>
               </div>
               <div className="w-full sm:w-auto">
+                <label htmlFor="customerFilterStatus" className="block text-sm font-medium text-gray-400 mb-1">Status Pembayaran</label>
+                <select
+                  id="customerFilterStatus"
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="w-full pl-3 pr-8 py-2 text-white bg-gray-800/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                >
+                  <option value="Semua" className="bg-gray-800">Semua Status</option>
+                  <option value="Lunas" className="bg-gray-800">Lunas</option>
+                  <option value="Belum Lunas" className="bg-gray-800">Belum Lunas</option>
+                </select>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
                 <button
                   onClick={() => setIsListVisible(!isListVisible)}
-                  className="w-full py-2 px-5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-sky-500 transition-colors"
+                  className="flex-1 sm:flex-initial py-2 px-5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-sky-600 hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-sky-500 transition-colors"
                 >
                   {isListVisible ? 'Sembunyikan' : 'Tampilkan'}
                 </button>
+                <button
+                  onClick={handleDownloadCustomerData}
+                  className="flex-1 sm:flex-initial py-2 px-5 flex items-center justify-center gap-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-colors"
+                  title="Unduh Data Pelanggan sebagai PDF"
+                >
+                  <DownloadIcon className="w-4 h-4" />
+                  <span>Unduh PDF</span>
+                </button>
+              </div>
+              <div className="w-full sm:w-auto">
+                <button
+                    onClick={handleNewBillingCycle}
+                    className="w-full py-2 px-5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-red-500 transition-colors"
+                  >
+                    Siklus Tagihan Baru
+                  </button>
               </div>
             </div>
             
             {isListVisible && (
-                <React.Fragment>
-                    {customers.length === 0 ? (
-                        <div className="text-center text-gray-400 mt-8">
-                            <p>Belum ada data pelanggan yang diinput.</p>
-                            <p>Silakan tambahkan pelanggan baru melalui menu "Input Pelanggan Baru".</p>
-                        </div>
-                    ) : (
-                        <React.Fragment>
-                            {renderCustomerTable()}
-                            {renderCustomerList()}
-                        </React.Fragment>
-                    )}
-                </React.Fragment>
+              <>
+                {renderCustomerList()}
+                {renderCustomerTable()}
+              </>
             )}
-            <div className="mt-8 flex flex-col sm:flex-row gap-4">
-              <button
-                onClick={handleNewBillingCycle}
-                className="w-full sm:w-auto py-2 px-4 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-white font-medium transition-colors"
-              >
-                Mulai Siklus Tagihan Baru
-              </button>
-              <button
-                onClick={handleDownloadCustomerData}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 py-2 px-4 bg-green-600 hover:bg-green-700 rounded-lg text-white font-medium transition-colors"
-              >
-                <DownloadIcon className="w-5 h-5" /> Unduh Data Pelanggan (PDF)
-              </button>
-            </div>
-          </React.Fragment>
-        )}
 
+          </div>
+        )}
         {activeMenu === 'input' && (
-          <div className="bg-white/5 p-6 rounded-lg">
-            <h2 className="text-2xl font-semibold mb-6 text-sky-400">{editingCustomer ? 'Edit Pelanggan' : 'Input Pelanggan Baru'}</h2>
-            <form onSubmit={handleCustomerFormSubmit} className="space-y-4">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">{editingCustomer ? 'Edit Data Pelanggan' : 'Formulir Pelanggan Baru'}</h2>
+            <form onSubmit={handleCustomerFormSubmit} className="space-y-4 max-w-xl mx-auto">
               <div>
                 <label htmlFor="nama" className="block text-sm font-medium text-gray-300 mb-1">Nama Pelanggan</label>
                 <input
@@ -1161,11 +1145,11 @@ ${companyInfo.name}`
                   onChange={(e) => setNama(e.target.value)}
                   required
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
-                  placeholder="Nama lengkap pelanggan"
+                  placeholder="Masukkan nama lengkap"
                 />
               </div>
               <div>
-                <label htmlFor="noHp" className="block text-sm font-medium text-gray-300 mb-1">Nomor HP (WhatsApp)</label>
+                <label htmlFor="noHp" className="block text-sm font-medium text-gray-300 mb-1">No Handphone</label>
                 <input
                   type="tel"
                   id="noHp"
@@ -1173,7 +1157,7 @@ ${companyInfo.name}`
                   onChange={(e) => setNoHp(e.target.value)}
                   required
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
-                  placeholder="Contoh: 081234567890"
+                  placeholder="Contoh: 08123456789"
                 />
               </div>
               <div>
@@ -1182,24 +1166,26 @@ ${companyInfo.name}`
                   id="jenisLangganan"
                   value={jenisLangganan}
                   onChange={(e) => setJenisLangganan(e.target.value)}
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                  required
+                  className="w-full pl-3 pr-3 py-2 text-white bg-gray-800/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
                 >
-                  <option>PPPoE</option>
-                  <option>Hotspot</option>
-                  <option>Dedicated</option>
+                  <option value="PPPoE" className="bg-gray-800">PPPoE</option>
+                  <option value="Static" className="bg-gray-800">Static</option>
+                  <option value="Hotspot" className="bg-gray-800">Hotspot</option>
+                  <option value="Mitra Voucher" className="bg-gray-800">Mitra Voucher</option>
                 </select>
               </div>
               <div>
-                <label htmlFor="alamat" className="block text-sm font-medium text-gray-300 mb-1">Alamat Pemasangan</label>
+                <label htmlFor="alamat" className="block text-sm font-medium text-gray-300 mb-1">Alamat</label>
                 <textarea
                   id="alamat"
+                  rows={3}
                   value={alamat}
                   onChange={(e) => setAlamat(e.target.value)}
                   required
-                  rows={3}
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
-                  placeholder="Alamat lengkap pemasangan internet"
-                ></textarea>
+                  placeholder="Masukkan alamat lengkap pelanggan"
+                />
               </div>
               <div>
                 <label htmlFor="harga" className="block text-sm font-medium text-gray-300 mb-1">Harga Langganan (Rp)</label>
@@ -1210,7 +1196,7 @@ ${companyInfo.name}`
                   onChange={(e) => setHarga(e.target.value)}
                   required
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
-                  placeholder="0"
+                  placeholder="Contoh: 150000"
                 />
               </div>
               <div>
@@ -1221,21 +1207,21 @@ ${companyInfo.name}`
                   value={dueDateInput}
                   onChange={(e) => setDueDateInput(e.target.value)}
                   required
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
                 />
               </div>
-              <div className="flex gap-4">
+              <div className="pt-4">
                 <button
                   type="submit"
-                  className="flex-grow py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 transition-transform transform hover:scale-105"
+                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 transition-transform transform hover:scale-105"
                 >
-                  {editingCustomer ? 'Perbarui Pelanggan' : 'Tambah Pelanggan'}
+                  {editingCustomer ? 'Update Pelanggan' : 'Simpan Pelanggan'}
                 </button>
-                {editingCustomer && (
+                 {editingCustomer && (
                   <button
                     type="button"
                     onClick={resetCustomerForm}
-                    className="flex-grow py-3 px-4 border border-gray-500 rounded-lg shadow-sm text-sm font-medium text-white hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-500 transition-colors"
+                    className="w-full flex justify-center mt-3 py-2 px-4 border border-gray-500 rounded-lg shadow-sm text-sm font-medium text-white hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-500 transition-colors"
                   >
                     Batal Edit
                   </button>
@@ -1244,24 +1230,23 @@ ${companyInfo.name}`
             </form>
           </div>
         )}
-
         {activeMenu === 'keuangan' && (
-          <div className="bg-white/5 p-6 rounded-lg">
-            <h2 className="text-2xl font-semibold mb-6 text-sky-400">{editingEntry ? 'Edit Catatan Keuangan' : 'Input Catatan Keuangan Baru'}</h2>
-            <form onSubmit={handleFinanceFormSubmit} className="space-y-4">
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">{editingEntry ? 'Edit Catatan Keuangan' : 'Formulir Catatan Keuangan'}</h2>
+            <form onSubmit={handleFinanceFormSubmit} className="space-y-4 max-w-xl mx-auto">
               <div>
                 <label htmlFor="deskripsi" className="block text-sm font-medium text-gray-300 mb-1">Deskripsi</label>
-                <input
-                  type="text"
+                <textarea
                   id="deskripsi"
+                  rows={3}
                   value={deskripsi}
                   onChange={(e) => setDeskripsi(e.target.value)}
                   required
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
-                  placeholder="Contoh: Pembelian router, Gaji karyawan"
+                  placeholder="Contoh: Pembelian router baru"
                 />
               </div>
-              <div>
+               <div>
                 <label htmlFor="tanggal" className="block text-sm font-medium text-gray-300 mb-1">Tanggal</label>
                 <input
                   type="date"
@@ -1269,7 +1254,7 @@ ${companyInfo.name}`
                   value={tanggal}
                   onChange={(e) => setTanggal(e.target.value)}
                   required
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
                 />
               </div>
               <div>
@@ -1278,23 +1263,24 @@ ${companyInfo.name}`
                   id="kategori"
                   value={kategori}
                   onChange={(e) => setKategori(e.target.value)}
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                  required
+                  className="w-full pl-3 pr-3 py-2 text-white bg-gray-800/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
                 >
-                  <option>Pemasukan</option>
-                  <option>Pengeluaran</option>
+                  <option value="Pemasukan" className="bg-gray-800">Pemasukan</option>
+                  <option value="Pengeluaran" className="bg-gray-800">Pengeluaran</option>
                 </select>
               </div>
               <div>
-                <label htmlFor="metode" className="block text-sm font-medium text-gray-300 mb-1">Metode Pembayaran/Transaksi</label>
+                <label htmlFor="metode" className="block text-sm font-medium text-gray-300 mb-1">Metode Pembayaran</label>
                 <select
                   id="metode"
                   value={metode}
                   onChange={(e) => setMetode(e.target.value)}
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                  required
+                  className="w-full pl-3 pr-3 py-2 text-white bg-gray-800/50 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
                 >
-                  <option>Transfer</option>
-                  <option>Tunai</option>
-                  <option>Internal</option> {/* For kas cadangan transfers */}
+                  <option value="Transfer" className="bg-gray-800">Transfer</option>
+                  <option value="Tunai" className="bg-gray-800">Tunai</option>
                 </select>
               </div>
               <div>
@@ -1306,21 +1292,21 @@ ${companyInfo.name}`
                   onChange={(e) => setNominal(e.target.value)}
                   required
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
-                  placeholder="0"
+                  placeholder="Contoh: 500000"
                 />
               </div>
-              <div className="flex gap-4">
+              <div className="pt-4">
                 <button
                   type="submit"
-                  className="flex-grow py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-blue-500 transition-transform transform hover:scale-105"
+                  className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-green-500 transition-transform transform hover:scale-105"
                 >
-                  {editingEntry ? 'Perbarui Catatan' : 'Tambah Catatan'}
+                  {editingEntry ? 'Update Catatan' : 'Simpan Catatan'}
                 </button>
                 {editingEntry && (
                   <button
                     type="button"
                     onClick={resetFinanceForm}
-                    className="flex-grow py-3 px-4 border border-gray-500 rounded-lg shadow-sm text-sm font-medium text-white hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-500 transition-colors"
+                    className="w-full flex justify-center mt-3 py-2 px-4 border border-gray-500 rounded-lg shadow-sm text-sm font-medium text-white hover:bg-gray-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-gray-500 transition-colors"
                   >
                     Batal Edit
                   </button>
@@ -1329,9 +1315,11 @@ ${companyInfo.name}`
             </form>
           </div>
         )}
-
         {activeMenu === 'riwayat' && (
-          renderFinanceHistory()
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-semibold mb-6 text-center">Riwayat Transaksi Keuangan</h2>
+            {renderFinanceHistory()}
+          </div>
         )}
       </main>
     </div>

@@ -1,11 +1,12 @@
+
 import React, { useState, useEffect } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import DownloadIcon from './icons/DownloadIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
-import { CompanyInfo } from '../App'; // Import CompanyInfo from App.tsx
-import Swal from 'sweetalert2'; // Import Swal for consistent module loading
+import { CompanyInfo, isLocalStorageAvailable } from '../App'; // Import CompanyInfo and isLocalStorageAvailable from App.tsx
 
-// Removed declare const jspdf: any;
+declare const jspdf: any;
+declare const Swal: any;
 
 interface InvoiceItem {
     id: number;
@@ -44,18 +45,6 @@ const InvoicePage: React.FC<InvoicePageProps> = ({ onBack, companyInfo, initialD
         }
         return defaultDate.toISOString().split('T')[0];
     });
-
-    // Utility function to check if localStorage is available and accessible
-    const isLocalStorageAvailable = (): boolean => {
-      try {
-        const testKey = '__test_localStorage__';
-        localStorage.setItem(testKey, testKey);
-        localStorage.removeItem(testKey);
-        return true;
-      } catch (e) {
-        return false;
-      }
-    }
     
     // Load draft from localStorage on initial render OR use initialData
     useEffect(() => {
@@ -195,7 +184,7 @@ Hormat kami,
     };
 
     const handleDownloadPDF = () => {
-        const { jsPDF } = (window as any).jspdf; // Use window.jspdf
+        const { jsPDF } = jspdf;
         const doc = new jsPDF();
         const pageWidth = doc.internal.pageSize.getWidth();
 

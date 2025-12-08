@@ -1,45 +1,41 @@
+
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import DownloadIcon from './icons/DownloadIcon';
-import { CompanyInfo } from '../App';
-import { FinanceEntry, ProfitShare } from './DashboardPage'; // Import FinanceEntry and ProfitShare from DashboardPage
-import Swal from 'sweetalert2'; // Import Swal for consistent module loading
+import { CompanyInfo } from '../App'; // Import CompanyInfo from App.tsx
 
-// Declare jspdf from CDN. The autoTable plugin will extend the jsPDF instance.
-// Removed declare const jspdf: any;
+// Declare jsPDF from CDN. The autoTable plugin will extend the jsPDF instance.
+declare const jspdf: any;
+declare const Swal: any;
 
-// Removed local ProfitShare definition to resolve circular dependency
+// FIX: Define and export ProfitShare here to break circular dependency
+export interface ProfitShare {
+  nama: string;
+  jumlah: number;
+}
+
+interface FinanceEntry {
+  id: number;
+  deskripsi: string;
+  tanggal: string;
+  kategori: string;
+  metode: string;
+  nominal: number;
+}
 
 interface LaporanBulananPageProps {
   onBack: () => void;
   financeHistory: FinanceEntry[];
   companyInfo: CompanyInfo;
   profitSharingData: ProfitShare[];
-  // setFinanceHistory: React.Dispatch<React.SetStateAction<FinanceEntry[]>>; // No longer directly used
-  // setProfitSharingData: React.Dispatch<React.SetStateAction<ProfitShare[]>>; // No longer directly used
+  setFinanceHistory: React.Dispatch<React.SetStateAction<FinanceEntry[]>>;
+  setProfitSharingData: React.Dispatch<React.SetStateAction<ProfitShare[]>>;
   kasCadangan: number;
   onProfitShareProcessed: (details: { total: number; members: number }) => void;
-  selectedMonth: string;
-  // New props for Supabase interaction
-  onAddUpdateFinanceEntry: (entry: Omit<FinanceEntry, 'user_id'> & {id?: number}) => Promise<FinanceEntry>;
-  onUpdateProfitSharingData: (profitShares: ProfitShare[]) => Promise<ProfitShare[]>;
-  saldoAkhir: number; // Passed from DashboardPage
-  userId: string;
+  selectedMonth: string; // Add selectedMonth prop
 }
 
-const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ 
-  onBack, 
-  financeHistory, 
-  companyInfo, 
-  profitSharingData, 
-  kasCadangan, 
-  onProfitShareProcessed, 
-  selectedMonth,
-  onAddUpdateFinanceEntry,
-  onUpdateProfitSharingData,
-  saldoAkhir, // Use passed saldoAkhir
-  userId,
-}) => {
+const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, financeHistory, companyInfo, profitSharingData, setFinanceHistory, setProfitSharingData, kasCadangan, onProfitShareProcessed, selectedMonth }) => {
   const [members, setMembers] = useState<string[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
 
@@ -86,18 +82,17 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({
     });
   };
   
-  // SaldoAkhir is now passed as a prop from DashboardPage
-  // const saldoAkhir = useMemo(() => {
-  //   const totalPemasukan = financeHistory
-  //   .filter(e => e.kategori === 'Pemasukan')
-  //   .reduce((acc, e) => acc + e.nominal, 0);
+  const saldoAkhir = useMemo(() => {
+    const totalPemasukan = financeHistory
+      .filter(e => e.kategori === 'Pemasukan')
+      .reduce((acc, e) => acc + e.nominal, 0);
 
-  //   const totalPengeluaran = financeHistory
-  //   .filter(e => e.kategori === 'Pengeluaran')
-  //   .reduce((acc, e) => acc + e.nominal, 0);
+    const totalPengeluaran = financeHistory
+      .filter(e => e.kategori === 'Pengeluaran')
+      .reduce((acc, e) => acc + e.nominal, 0);
 
-  //   return totalPemasukan - totalPengeluaran;
-  // }, [financeHistory]);
+    return totalPemasukan - totalPengeluaran;
+  }, [financeHistory]);
 
   const handleAddMember = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -111,7 +106,7 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({
     setMembers(members.filter(member => member !== nameToRemove));
   };
 
-  const handleProcessProfitSharing = async () => {
+  const handleProcessProfitSharing = () => {
      if (saldoAkhir <= 0) {
       Swal.fire('Gagal', 'Saldo tidak mencukupi untuk bagi hasil.', 'error');
       return;
@@ -121,9 +116,9 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({
       return;
     }
     
-    const sharePerMember = Math.floor(saldoAkhir / members.length); // Use Math.floor to avoid floating point issues for money
+    const sharePerMember = saldoAkhir / members.length;
 
-    await Swal.fire({
+    Swal.fire({
       title: 'Konfirmasi Bagi Hasil',
       html: `
         <div class="text-left text-gray-300">
@@ -144,56 +139,46 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({
           confirmButton: '!bg-blue-600 hover:!bg-blue-700',
           cancelButton: '!bg-gray-600 hover:!bg-gray-700',
       },
-    }).then(async (result: any) => {
+    }).then((result: any) => {
         if (result.isConfirmed) {
-            try {
-                const newProfitSharingData = members.map(member => ({
-                    nama: member,
-                    jumlah: sharePerMember,
-                    user_id: userId, // Add user_id
-                }));
-                await onUpdateProfitSharingData(newProfitSharingData); // Use Supabase updater
+            const newProfitSharingData = members.map(member => ({
+                nama: member,
+                jumlah: sharePerMember,
+            }));
+            setProfitSharingData(newProfitSharingData);
 
-                const newExpenseEntry = {
-                    deskripsi: `Bagi Hasil kepada ${members.length} anggota`,
-                    tanggal: new Date().toISOString().split('T')[0],
-                    kategori: 'Pengeluaran' as const,
-                    metode: 'Transfer',
-                    nominal: saldoAkhir,
-                    user_id: userId, // Add user_id
-                };
-                await onAddUpdateFinanceEntry(newExpenseEntry); // Use Supabase updater
-                onProfitShareProcessed({ total: saldoAkhir, members: members.length });
+            const newExpenseEntry: FinanceEntry = {
+                id: Date.now(),
+                deskripsi: `Bagi Hasil kepada ${members.length} anggota`,
+                tanggal: new Date().toISOString().split('T')[0],
+                kategori: 'Pengeluaran',
+                metode: 'Transfer',
+                nominal: saldoAkhir,
+            };
+            setFinanceHistory(prev => [...prev, newExpenseEntry]);
+            onProfitShareProcessed({ total: saldoAkhir, members: members.length });
 
-                setMembers([]); // Clear local member list after processing
+            setMembers([]);
 
-                Swal.fire({
-                    title: 'Berhasil!',
-                    text: 'Proses bagi hasil telah selesai dan dicatat sebagai pengeluaran.',
-                    icon: 'success',
-                    customClass: {
-                        popup: '!bg-gray-800 !text-white !rounded-lg',
-                        title: '!text-white',
-                        confirmButton: '!bg-blue-600 hover:!bg-blue-700',
-                    }
-                });
-            } catch (error: any) {
-                console.error("Error processing profit share:", error.message);
-                Swal.fire({
-                    title: 'Error!',
-                    text: `Gagal memproses bagi hasil: ${error.message}`,
-                    icon: 'error',
-                    confirmButtonColor: '#d33',
-                });
-            }
+            Swal.fire({
+                title: 'Berhasil!',
+                text: 'Proses bagi hasil telah selesai dan dicatat sebagai pengeluaran.',
+                icon: 'success',
+                customClass: {
+                    popup: '!bg-gray-800 !text-white !rounded-lg',
+                    title: '!text-white',
+                    confirmButton: '!bg-blue-600 hover:!bg-blue-700',
+                }
+            });
         }
-    });
+    })
   };
+
 
   const monthlyData = generateReport();
 
   const handleDownloadPDF = () => {
-    const { jsPDF } = (window as any).jspdf; // Use window.jspdf
+    const { jsPDF } = jspdf;
     const doc = new jsPDF();
     
     // Header

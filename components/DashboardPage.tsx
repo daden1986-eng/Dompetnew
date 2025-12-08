@@ -1,26 +1,24 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
-import LaporanBulananPage from './LaporanBulananPage';
+import LaporanBulananPage, { ProfitShare } from './LaporanBulananPage'; // Import ProfitShare and LaporanBulananPage
 import InvoicePage, { InvoiceInitialData } from './InvoicePage';
 import KasCadanganPage from './KasCadanganPage';
 import VoucherPage from './VoucherPage';
 import * as Recharts from 'recharts';
 import SettingsIcon from './icons/SettingsIcon';
 import TicketIcon from './icons/TicketIcon';
-import { CompanyInfo } from '../App';
-import { supabase } from '../supabaseClient';
-import Swal from 'sweetalert2'; // Import Swal for consistent module loading
+import { CompanyInfo, isLocalStorageAvailable } from '../App'; // Import CompanyInfo and isLocalStorageAvailable from App.tsx
 
-// Declare jspdf to inform TypeScript about the global variable from the CDN script
-// Removed declare const jspdf: any;
+// Declare Swal to inform TypeScript about the global variable from the CDN script
+declare const Swal: any;
 
 // Destructure components from the Recharts namespace
 const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line } = Recharts;
 
 // Interfaces defined locally as they are heavily used here
-export interface Customer {
+interface Customer {
   id: number;
-  user_id?: string; // Add user_id for Supabase
   nama: string;
   noHp: string;
   jenisLangganan: string;
@@ -31,9 +29,8 @@ export interface Customer {
   dueDate: string; // Added dueDate
 }
 
-export interface FinanceEntry {
+interface FinanceEntry {
   id: number;
-  user_id?: string; // Add user_id for Supabase
   deskripsi: string;
   tanggal: string;
   kategori: string;
@@ -41,203 +38,98 @@ export interface FinanceEntry {
   nominal: number;
 }
 
-// Moved ProfitShare definition here to break circular dependency
-export interface ProfitShare {
-    id?: number; // Supabase ID
-    user_id?: string;
-    nama: string;
-    jumlah: number;
-}
-
 interface DashboardPageProps {
   onLogout: () => void;
   username: string;
   companyInfo: CompanyInfo;
-  setCompanyInfo: (newInfo: CompanyInfo) => Promise<boolean>; // Updated to reflect async Supabase call
-  userId: string; // Pass userId from App.tsx
+  setCompanyInfo: React.Dispatch<React.SetStateAction<CompanyInfo>>;
 }
 
-const CUSTOMERS_TABLE = 'customers';
-const FINANCE_HISTORY_TABLE = 'finance_history';
-const PROFIT_SHARE_TABLE = 'profit_share';
-const KAS_CADANGAN_TABLE = 'kas_cadangan';
-
-
-const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo, userId }) => {
+const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
   const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher'>('dashboard');
   const [invoiceInitialData, setInvoiceInitialData] = useState<InvoiceInitialData | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>('all'); // State for month filter
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [financeHistory, setFinanceHistory] = useState<FinanceEntry[]>([]);
-  const [profitSharingData, setProfitSharingData] = useState<ProfitShare[]>([]);
-  const [kasCadangan, setKasCadangan] = useState<number>(0);
-  const [loadingData, setLoadingData] = useState(true);
-
-  // --- Supabase Data Operations ---
-  const fetchData = useCallback(async () => {
-    setLoadingData(true);
+  const [customers, setCustomers] = useState<Customer[]>(() => {
+    if (!isLocalStorageAvailable()) return [];
     try {
-      // Fetch Customers
-      const { data: customersData, error: customersError } = await supabase
-        .from<Customer>(CUSTOMERS_TABLE)
-        .select('*')
-        .eq('user_id', userId);
-      if (customersError) throw customersError;
-      setCustomers(customersData || []);
-
-      // Fetch Finance History
-      const { data: financeData, error: financeError } = await supabase
-        .from<FinanceEntry>(FINANCE_HISTORY_TABLE)
-        .select('*')
-        .eq('user_id', userId);
-      if (financeError) throw financeError;
-      setFinanceHistory(financeData || []);
-
-      // Fetch Profit Sharing Data
-      const { data: profitShareData, error: profitShareError } = await supabase
-        .from<ProfitShare>(PROFIT_SHARE_TABLE)
-        .select('*')
-        .eq('user_id', userId);
-      if (profitShareError) throw profitShareError;
-      setProfitSharingData(profitShareData || []);
-
-      // Fetch Kas Cadangan
-      const { data: kasCadanganData, error: kasCadanganError } = await supabase
-        .from<{id?: number; user_id: string; amount: number}>(KAS_CADANGAN_TABLE)
-        .select('id, amount')
-        .eq('user_id', userId)
-        .single();
-      if (kasCadanganError && kasCadanganError.code !== 'PGRST116') throw kasCadanganError; // PGRST116 means no rows found
-      setKasCadangan(kasCadanganData ? kasCadanganData.amount : 0);
-      if (!kasCadanganData) { // If no kas cadangan exists, create a default one
-        const { error: insertKasError } = await supabase
-          .from(KAS_CADANGAN_TABLE)
-          .insert({ user_id: userId, amount: 0 });
-        if (insertKasError) console.error("Error inserting default kas cadangan:", insertKasError.message);
-      }
-
-    } catch (error: any) {
-      console.error('Error fetching data:', error.message);
-      Swal.fire({
-        title: 'Error Memuat Data',
-        text: 'Terjadi kesalahan saat memuat data Anda. Silakan coba refresh halaman.',
-        icon: 'error',
-        customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
-      });
-    } finally {
-      setLoadingData(false);
+        const saved = localStorage.getItem('sidompet_customers');
+        return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+        console.error("Gagal memuat data pelanggan dari penyimpanan:", e);
+        return [];
     }
-  }, [userId]);
+  });
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // General upsert/delete wrappers for components
-  const updateCustomerSupabase = useCallback(async (customer: Omit<Customer, 'user_id'> & {id?: number}) => {
-    const customerWithUser = { ...customer, user_id: userId };
-    if (customerWithUser.id) {
-        // Update existing
-        const { data, error } = await supabase
-            .from(CUSTOMERS_TABLE)
-            .update(customerWithUser)
-            .eq('id', customerWithUser.id)
-            .eq('user_id', userId) // Ensure user owns the data
-            .select()
-            .single();
-        if (error) throw error;
-        setCustomers(prev => prev.map(c => c.id === data.id ? data : c));
-        return data;
-    } else {
-        // Insert new
-        const { data, error } = await supabase
-            .from(CUSTOMERS_TABLE)
-            .insert(customerWithUser)
-            .select()
-            .single();
-        if (error) throw error;
-        setCustomers(prev => [...prev, data]);
-        return data;
+    if (!isLocalStorageAvailable()) return;
+    try {
+        localStorage.setItem('sidompet_customers', JSON.stringify(customers));
+    } catch (e) {
+        console.error("Gagal menyimpan data pelanggan:", e);
     }
-  }, [userId]);
+  }, [customers]);
 
-  const deleteCustomerSupabase = useCallback(async (id: number) => {
-    const { error } = await supabase
-      .from(CUSTOMERS_TABLE)
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
-    if (error) throw error;
-    setCustomers(prev => prev.filter(c => c.id !== id));
-  }, [userId]);
+  const [financeHistory, setFinanceHistory] = useState<FinanceEntry[]>(() => {
+      if (!isLocalStorageAvailable()) return [];
+      try {
+          const saved = localStorage.getItem('sidompet_financeHistory');
+          return saved ? JSON.parse(saved) : [];
+      } catch (e) {
+          console.error("Gagal memuat riwayat keuangan dari penyimpanan:", e);
+          return [];
+      }
+  });
 
-  const updateFinanceEntrySupabase = useCallback(async (entry: Omit<FinanceEntry, 'user_id'> & {id?: number}) => {
-    const entryWithUser = { ...entry, user_id: userId };
-    if (entryWithUser.id) {
-        const { data, error } = await supabase
-            .from(FINANCE_HISTORY_TABLE)
-            .update(entryWithUser)
-            .eq('id', entryWithUser.id)
-            .eq('user_id', userId)
-            .select()
-            .single();
-        if (error) throw error;
-        setFinanceHistory(prev => prev.map(e => e.id === data.id ? data : e));
-        return data;
-    } else {
-        const { data, error } = await supabase
-            .from(FINANCE_HISTORY_TABLE)
-            .insert(entryWithUser)
-            .select()
-            .single();
-        if (error) throw error;
-        setFinanceHistory(prev => [...prev, data]);
-        return data;
+  useEffect(() => {
+      if (!isLocalStorageAvailable()) return;
+      try {
+          localStorage.setItem('sidompet_financeHistory', JSON.stringify(financeHistory));
+      } catch (e) {
+          console.error("Gagal menyimpan riwayat keuangan:", e);
+      }
+  }, [financeHistory]);
+
+  const [profitSharingData, setProfitSharingData] = useState<ProfitShare[]>(() => {
+    if (!isLocalStorageAvailable()) return [];
+    try {
+        const saved = localStorage.getItem('sidompet_profitSharing');
+        return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+        console.error("Gagal memuat data bagi hasil dari penyimpanan:", e);
+        return [];
     }
-  }, [userId]);
+  });
 
-  const deleteFinanceEntrySupabase = useCallback(async (id: number) => {
-    const { error } = await supabase
-      .from(FINANCE_HISTORY_TABLE)
-      .delete()
-      .eq('id', id)
-      .eq('user_id', userId);
-    if (error) throw error;
-    setFinanceHistory(prev => prev.filter(e => e.id !== id));
-  }, [userId]);
+  useEffect(() => {
+      if (!isLocalStorageAvailable()) return;
+      try {
+          localStorage.setItem('sidompet_profitSharing', JSON.stringify(profitSharingData));
+      } catch (e) {
+          console.error("Gagal menyimpan data bagi hasil:", e);
+      }
+  }, [profitSharingData]);
+    
+  const [kasCadangan, setKasCadangan] = useState<number>(() => {
+    if (!isLocalStorageAvailable()) return 0;
+    try {
+        const saved = localStorage.getItem('sidompet_kasCadangan');
+        return saved ? JSON.parse(saved) : 0;
+    } catch (e) {
+        console.error("Gagal memuat kas cadangan dari penyimpanan:", e);
+        return 0;
+    }
+  });
 
-  const updateProfitSharingDataSupabase = useCallback(async (profitShares: ProfitShare[]) => {
-    // Supabase doesn't have a direct "update all if exists, insert if not" for arrays of objects that are not already in DB.
-    // For simplicity, we'll delete existing for this user and re-insert the new set.
-    // In a real app, this might involve more complex logic to compare and upsert.
-    const { error: deleteError } = await supabase
-      .from(PROFIT_SHARE_TABLE)
-      .delete()
-      .eq('user_id', userId);
-    if (deleteError) throw deleteError;
-
-    const profitSharesWithUser = profitShares.map(ps => ({ ...ps, user_id: userId }));
-    const { data, error: insertError } = await supabase
-      .from(PROFIT_SHARE_TABLE)
-      .insert(profitSharesWithUser)
-      .select();
-    if (insertError) throw insertError;
-    setProfitSharingData(data || []);
-    return data;
-  }, [userId]);
-
-  const updateKasCadanganSupabase = useCallback(async (amount: number) => {
-    const { data, error } = await supabase
-      .from(KAS_CADANGAN_TABLE)
-      .upsert({ user_id: userId, amount }, { onConflict: 'user_id' })
-      .select('amount')
-      .single();
-    if (error) throw error;
-    setKasCadangan(data.amount);
-    return data.amount;
-  }, [userId]);
-
+  useEffect(() => {
+    if (!isLocalStorageAvailable()) return;
+    try {
+        localStorage.setItem('sidompet_kasCadangan', JSON.stringify(kasCadangan));
+    } catch (e) {
+        console.error("Gagal menyimpan kas cadangan:", e);
+    }
+  }, [kasCadangan]);
+    
   const saldoAkhir = useMemo(() => {
     const totalPemasukan = financeHistory.filter(e => e.kategori === 'Pemasukan').reduce((acc, e) => acc + e.nominal, 0);
     const totalPengeluaran = financeHistory.filter(e => e.kategori === 'Pengeluaran').reduce((acc, e) => acc + e.nominal, 0);
@@ -380,7 +272,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = async (e) => { // Made onload async
+    reader.onload = (e) => {
         try {
             const text = e.target?.result as string;
             const parsedData = JSON.parse(text);
@@ -404,56 +296,30 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                     confirmButton: '!bg-red-600 hover:!bg-red-700',
                     cancelButton: '!bg-gray-600 hover:!bg-gray-700',
                 },
-            }).then(async (result: any) => { // Made then block async
+            }).then((result: any) => {
                 if (result.isConfirmed) {
-                    try {
-                        // Clear existing data in Supabase for this user
-                        await supabase.from(CUSTOMERS_TABLE).delete().eq('user_id', userId);
-                        await supabase.from(FINANCE_HISTORY_TABLE).delete().eq('user_id', userId);
-                        await supabase.from(PROFIT_SHARE_TABLE).delete().eq('user_id', userId);
-                        // For kas_cadangan and company_info, we upsert, so no explicit delete is needed unless the ID changes.
-
-                        // Insert/Update with restored data
-                        if (parsedData.companyInfo) {
-                            await setCompanyInfo(parsedData.companyInfo); // This handles upsert
-                        }
-                        const customersToInsert = parsedData.customers.map((c: Customer) => ({ ...c, user_id: userId, id: undefined })); // Remove old IDs
-                        const financeToInsert = parsedData.financeHistory.map((f: FinanceEntry) => ({ ...f, user_id: userId, id: undefined })); // Remove old IDs
-                        const profitShareToInsert = parsedData.profitSharingData ? parsedData.profitSharingData.map((ps: ProfitShare) => ({ ...ps, user_id: userId, id: undefined })) : []; // Remove old IDs
-
-                        if (customersToInsert.length > 0) await supabase.from(CUSTOMERS_TABLE).insert(customersToInsert);
-                        if (financeToInsert.length > 0) await supabase.from(FINANCE_HISTORY_TABLE).insert(financeToInsert);
-                        if (profitShareToInsert.length > 0) await supabase.from(PROFIT_SHARE_TABLE).insert(profitShareToInsert);
-                        
-                        if (parsedData.kasCadangan !== undefined) {
-                            await updateKasCadanganSupabase(parsedData.kasCadangan); // This handles upsert
-                        }
-
-                        await fetchData(); // Re-fetch all data to update UI
-
-                        Swal.fire({
-                            title: 'Restore Berhasil!',
-                            text: 'Data telah berhasil dipulihkan dari file backup.',
-                            icon: 'success',
-                            customClass: {
-                              popup: '!bg-gray-800 !text-white !rounded-lg',
-                              title: '!text-white',
-                              confirmButton: '!bg-blue-600 hover:!bg-blue-700',
-                            }
-                        });
-                    } catch (dbError: any) {
-                        console.error("Gagal melakukan operasi Supabase saat restore:", dbError.message);
-                        Swal.fire({
-                            title: 'Restore Gagal (Database)',
-                            text: `Terjadi kesalahan saat menyimpan data ke database: ${dbError.message}`,
-                            icon: 'error',
-                            customClass: {
-                                popup: '!bg-gray-800 !text-white !rounded-lg',
-                                title: '!text-white',
-                                confirmButton: '!bg-red-600 hover:!bg-red-700',
-                            },
-                        });
+                    if (parsedData.companyInfo) {
+                        setCompanyInfo(parsedData.companyInfo);
                     }
+                    setCustomers(parsedData.customers);
+                    setFinanceHistory(parsedData.financeHistory);
+                    if (parsedData.kasCadangan) {
+                        setKasCadangan(parsedData.kasCadangan);
+                    }
+                    if (parsedData.profitSharingData) {
+                        setProfitSharingData(parsedData.profitSharingData);
+                    }
+                    
+                    Swal.fire({
+                        title: 'Restore Berhasil!',
+                        text: 'Data telah berhasil dipulihkan dari file backup.',
+                        icon: 'success',
+                        customClass: {
+                          popup: '!bg-gray-800 !text-white !rounded-lg',
+                          title: '!text-white',
+                          confirmButton: '!bg-blue-600 hover:!bg-blue-700',
+                        }
+                    });
                 }
             });
         } catch (error: any) {
@@ -658,7 +524,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
           
           if (filesToProcess === 0) { // No files to upload
             resolve({
-                ...companyInfo, // Keep existing ID and user_id
                 name,
                 address,
                 phone,
@@ -667,36 +532,25 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                 namaBank,
                 nomorRekening,
                 atasNama,
+                logo: companyInfo.logo,
+                stampLogo: companyInfo.stampLogo,
             });
           }
         });
       }
-    }).then(async (result) => { // Made then block async
+    }).then((result) => {
       if (result.isConfirmed && result.value) {
-        const success = await setCompanyInfo(result.value as CompanyInfo);
-        if (success) {
-            Swal.fire({
-                title: 'Berhasil!',
-                text: 'Pengaturan perusahaan telah diperbarui.',
-                icon: 'success',
-                customClass: {
-                  popup: '!bg-gray-800 !text-white !rounded-lg',
-                  title: '!text-white',
-                  confirmButton: '!bg-blue-600 hover:!bg-blue-700',
-                }
-            });
-        } else {
-            Swal.fire({
-                title: 'Gagal!',
-                text: 'Gagal memperbarui pengaturan perusahaan. Silakan coba lagi.',
-                icon: 'error',
-                customClass: {
-                  popup: '!bg-gray-800 !text-white !rounded-lg',
-                  title: '!text-white',
-                  confirmButton: '!bg-red-600 hover:!bg-red-700',
-                }
-            });
-        }
+        setCompanyInfo(result.value as CompanyInfo);
+        Swal.fire({
+            title: 'Berhasil!',
+            text: 'Pengaturan perusahaan telah diperbarui.',
+            icon: 'success',
+            customClass: {
+              popup: '!bg-gray-800 !text-white !rounded-lg',
+              title: '!text-white',
+              confirmButton: '!bg-blue-600 hover:!bg-blue-700',
+            }
+        });
       }
     });
   };
@@ -791,18 +645,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
 
 
   const renderFinancialVisualisation = () => {
-    if (loadingData) {
-      return (
-        <div className="text-center text-gray-400 mt-8">
-          <p className="text-3xl">Memuat data...</p>
-          <svg className="animate-spin h-8 w-8 text-white mx-auto mt-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-          </svg>
-        </div>
-      );
-    }
-    
     if (financeHistory.length === 0 && customers.length === 0) { // Check both finance and customers
       const capitalizedUsername = username.charAt(0).toUpperCase() + username.slice(1);
       return (
@@ -1098,20 +940,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
           <SirekapPage 
             onBack={handleBack} 
             customers={customers}
-            setCustomers={setCustomers} // This will be replaced by updateCustomerSupabase etc.
+            setCustomers={setCustomers}
             financeHistory={financeHistory}
-            setFinanceHistory={setFinanceHistory} // This will be replaced by updateFinanceEntrySupabase etc.
+            setFinanceHistory={setFinanceHistory}
             onPaymentSuccess={handlePaymentSuccessNotification}
             onNewCustomer={handleNewCustomerNotification}
             onNewFinanceEntry={handleNewFinanceEntryNotification}
             companyInfo={companyInfo}
             onGenerateInvoice={handleGenerateInvoiceFromSirekap}
-            // Pass Supabase interaction functions
-            onAddUpdateCustomer={updateCustomerSupabase}
-            onDeleteCustomer={deleteCustomerSupabase}
-            onAddUpdateFinanceEntry={updateFinanceEntrySupabase}
-            onDeleteFinanceEntry={deleteFinanceEntrySupabase}
-            userId={userId}
           />
         ) : activePage === 'laporan' ? (
           <LaporanBulananPage 
@@ -1119,16 +955,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             financeHistory={financeHistory}
             companyInfo={companyInfo}
             profitSharingData={profitSharingData}
-            setFinanceHistory={setFinanceHistory} // Will use direct supabase interaction
-            setProfitSharingData={setProfitSharingData} // Will use direct supabase interaction
+            setFinanceHistory={setFinanceHistory}
+            setProfitSharingData={setProfitSharingData}
             kasCadangan={kasCadangan}
             onProfitShareProcessed={handleProfitShareNotification}
             selectedMonth={selectedMonth} // Pass selectedMonth to LaporanBulananPage
-            // Pass Supabase interaction functions
-            onAddUpdateFinanceEntry={updateFinanceEntrySupabase}
-            onUpdateProfitSharingData={updateProfitSharingDataSupabase}
-            saldoAkhir={saldoAkhir}
-            userId={userId}
           />
         ) : activePage === 'invoice' ? (
           <InvoicePage
@@ -1140,24 +971,18 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
           <KasCadanganPage
             onBack={handleBack}
             kasCadangan={kasCadangan}
-            setKasCadangan={setKasCadangan} // Will use direct supabase interaction
+            setKasCadangan={setKasCadangan}
             saldoAkhir={saldoAkhir}
             financeHistory={financeHistory}
-            setFinanceHistory={setFinanceHistory} // Will use direct supabase interaction
+            setFinanceHistory={setFinanceHistory}
             onKasActivity={handleKasCadanganNotification}
-            // Pass Supabase interaction functions
-            onAddUpdateFinanceEntry={updateFinanceEntrySupabase}
-            onUpdateKasCadangan={updateKasCadanganSupabase}
           />
         ) : activePage === 'voucher' ? (
           <VoucherPage
             onBack={handleBack}
             financeHistory={financeHistory}
-            setFinanceHistory={setFinanceHistory} // Will use direct supabase interaction
+            setFinanceHistory={setFinanceHistory}
             onNewFinanceEntry={handleNewFinanceEntryNotification}
-            // Pass Supabase interaction functions
-            onAddUpdateFinanceEntry={updateFinanceEntrySupabase}
-            onDeleteFinanceEntry={deleteFinanceEntrySupabase}
           />
         ) : (
           <>
@@ -1224,6 +1049,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
       </div>
     </div>
   );
-}
+};
 
 export default DashboardPage;
