@@ -1,31 +1,24 @@
-
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
-import { CompanyInfo } from '../App'; // Import CompanyInfo for type consistency
-
-declare const Swal: any;
-
-interface FinanceEntry {
-  id: number;
-  deskripsi: string;
-  tanggal: string;
-  kategori: string;
-  metode: string;
-  nominal: number;
-}
+import { FinanceEntry } from './DashboardPage'; // Import FinanceEntry from DashboardPage
+import Swal from 'sweetalert2'; // Import Swal for consistent module loading
 
 interface VoucherPageProps {
   onBack: () => void;
   financeHistory: FinanceEntry[];
-  setFinanceHistory: React.Dispatch<React.SetStateAction<FinanceEntry[]>>;
+  // setFinanceHistory: React.Dispatch<React.SetStateAction<FinanceEntry[]>>; // No longer directly used
   onNewFinanceEntry: (entry: FinanceEntry) => void;
+  // New props for Supabase interaction
+  onAddUpdateFinanceEntry: (entry: Omit<FinanceEntry, 'user_id'> & {id?: number}) => Promise<FinanceEntry>;
+  onDeleteFinanceEntry: (id: number) => Promise<void>;
 }
 
 const VoucherPage: React.FC<VoucherPageProps> = ({
   onBack,
   financeHistory,
-  setFinanceHistory,
-  onNewFinanceEntry
+  onNewFinanceEntry,
+  onAddUpdateFinanceEntry,
+  onDeleteFinanceEntry,
 }) => {
   const [editingId, setEditingId] = useState<number | null>(null);
   
@@ -58,7 +51,7 @@ const VoucherPage: React.FC<VoucherPageProps> = ({
     setTanggal(entry.tanggal);
 
     // Try to parse description: "Penjualan Voucher - [Type] ([Qty] pcs)"
-    // Regex: Penjualan Voucher - (.*?) \((\d+) pcs\)
+    // Regex: Penjualan Voucher - (.*?) \((\d+) pcs\)/
     const regex = /Penjualan Voucher - (.*?) \((\d+) pcs\)/;
     const match = entry.deskripsi.match(regex);
 
@@ -86,8 +79,8 @@ const VoucherPage: React.FC<VoucherPageProps> = ({
     }
   };
 
-  const handleDelete = (id: number) => {
-    Swal.fire({
+  const handleDelete = async (id: number) => {
+    await Swal.fire({
       title: 'Hapus Transaksi?',
       text: "Data penjualan voucher ini akan dihapus permanen.",
       icon: 'warning',
@@ -103,21 +96,31 @@ const VoucherPage: React.FC<VoucherPageProps> = ({
           confirmButton: '!bg-red-600 hover:!bg-red-700',
           cancelButton: '!bg-gray-600 hover:!bg-gray-700',
       },
-    }).then((result: any) => {
+    }).then(async (result: any) => {
       if (result.isConfirmed) {
-        setFinanceHistory(prev => prev.filter(entry => entry.id !== id));
-        if (editingId === id) resetForm();
-        Swal.fire({
-            title: 'Dihapus!',
-            text: 'Data telah dihapus.',
-            icon: 'success',
-            customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
-        });
+        try {
+            await onDeleteFinanceEntry(id);
+            if (editingId === id) resetForm();
+            Swal.fire({
+                title: 'Dihapus!',
+                text: 'Data telah dihapus.',
+                icon: 'success',
+                customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
+            });
+        } catch (error: any) {
+            console.error("Error deleting voucher entry:", error.message);
+            Swal.fire({
+                title: 'Error!',
+                text: `Gagal menghapus data penjualan voucher: ${error.message}`,
+                icon: 'error',
+                customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
+            });
+        }
       }
     });
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
     const qty = Number(quantity);
@@ -137,49 +140,56 @@ const VoucherPage: React.FC<VoucherPageProps> = ({
     const finalType = voucherType === 'Lainnya' ? customType : voucherType;
     const description = `Penjualan Voucher - ${finalType} (${qty} pcs)`;
 
-    if (editingId) {
-        // UPDATE Existing
-        setFinanceHistory(prev => prev.map(entry => {
-            if (entry.id === editingId) {
-                return {
-                    ...entry,
-                    deskripsi: description,
-                    tanggal: tanggal,
-                    nominal: total
-                };
-            }
-            return entry;
-        }));
+    try {
+        if (editingId) {
+            // UPDATE Existing
+            const updatedEntry = financeHistory.find(entry => entry.id === editingId);
+            if (!updatedEntry) throw new Error('Entry not found for editing.');
+
+            await onAddUpdateFinanceEntry({
+                ...updatedEntry,
+                deskripsi: description,
+                tanggal: tanggal,
+                nominal: total,
+            });
+            Swal.fire({
+                title: 'Berhasil',
+                text: 'Data penjualan voucher berhasil diperbarui.',
+                icon: 'success',
+                customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
+            });
+            resetForm();
+        } else {
+            // CREATE New
+            const newEntry = {
+                deskripsi: description,
+                tanggal: tanggal,
+                kategori: 'Pemasukan' as const,
+                metode: 'Tunai', // Default to Tunai for vouchers usually
+                nominal: total,
+            };
+
+            const addedEntry = await onAddUpdateFinanceEntry(newEntry);
+            onNewFinanceEntry(addedEntry); // Notify dashboard
+
+            Swal.fire({
+                title: 'Berhasil',
+                text: `Pendapatan Voucher sebesar Rp ${total.toLocaleString('id-ID')} berhasil disimpan.`,
+                icon: 'success',
+                customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
+            });
+            
+            // Reset qty only for quick input
+            setQuantity('');
+        }
+    } catch (error: any) {
+        console.error("Error saving voucher entry:", error.message);
         Swal.fire({
-            title: 'Berhasil',
-            text: 'Data penjualan voucher berhasil diperbarui.',
-            icon: 'success',
+            title: 'Error!',
+            text: `Gagal menyimpan penjualan voucher: ${error.message}`,
+            icon: 'error',
             customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
         });
-        resetForm();
-    } else {
-        // CREATE New
-        const newEntry: FinanceEntry = {
-            id: Date.now(),
-            deskripsi: description,
-            tanggal: tanggal,
-            kategori: 'Pemasukan',
-            metode: 'Tunai', // Default to Tunai for vouchers usually
-            nominal: total,
-        };
-
-        setFinanceHistory(prev => [...prev, newEntry]);
-        onNewFinanceEntry(newEntry);
-
-        Swal.fire({
-            title: 'Berhasil',
-            text: `Pendapatan Voucher sebesar Rp ${total.toLocaleString('id-ID')} berhasil disimpan.`,
-            icon: 'success',
-            customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
-        });
-        
-        // Reset qty only for quick input
-        setQuantity('');
     }
   };
 

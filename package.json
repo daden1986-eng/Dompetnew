@@ -12,7 +12,9 @@
     "react-dom": "^19.2.0",
     "react": "^19.2.0",
     "recharts": "^2.12.7",
-    "prop-types": "^15.8.1"
+    "prop-types": "^15.8.1",
+    "@supabase/supabase-js": "^2.86.2",
+    "sweetalert2": "^11.26.4"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

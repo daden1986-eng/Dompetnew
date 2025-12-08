@@ -1,43 +1,35 @@
-
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
-import { CompanyInfo } from '../App'; // Import CompanyInfo for type consistency
-
-declare const Swal: any;
-
-interface FinanceEntry {
-  id: number;
-  deskripsi: string;
-  tanggal: string;
-  kategori: string;
-  metode: string;
-  nominal: number;
-}
+import { FinanceEntry } from './DashboardPage'; // Import FinanceEntry from DashboardPage
+import Swal from 'sweetalert2'; // Import Swal for consistent module loading
 
 interface KasCadanganPageProps {
   onBack: () => void;
   kasCadangan: number;
-  setKasCadangan: React.Dispatch<React.SetStateAction<number>>;
+  // setKasCadangan: React.Dispatch<React.SetStateAction<number>>; // No longer directly used
   saldoAkhir: number;
-  setFinanceHistory: React.Dispatch<React.SetStateAction<FinanceEntry[]>>;
+  // setFinanceHistory: React.Dispatch<React.SetStateAction<FinanceEntry[]>>; // No longer directly used
   financeHistory: FinanceEntry[];
   onKasActivity: (type: 'add' | 'use', amount: number) => void;
+  // New props for Supabase interaction
+  onAddUpdateFinanceEntry: (entry: Omit<FinanceEntry, 'user_id'> & {id?: number}) => Promise<FinanceEntry>;
+  onUpdateKasCadangan: (amount: number) => Promise<number>;
 }
 
 const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
   onBack,
   kasCadangan,
-  setKasCadangan,
   saldoAkhir,
-  setFinanceHistory,
   financeHistory,
-  onKasActivity
+  onKasActivity,
+  onAddUpdateFinanceEntry,
+  onUpdateKasCadangan,
 }) => {
   const [tambahAmount, setTambahAmount] = useState('');
   const [tambahDeskripsi, setTambahDeskripsi] = useState(''); // New state for description
   const [gunakanAmount, setGunakanAmount] = useState('');
 
-  const handleTambahKas = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleTambahKas = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const amount = Number(tambahAmount);
     if (amount <= 0 || isNaN(amount)) {
@@ -49,28 +41,32 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
       return;
     }
     
-    // Construct description ensuring "Kas Cadangan" is present for filtering
-    const descriptionSuffix = tambahDeskripsi.trim() ? ` - ${tambahDeskripsi}` : '';
-    const finalDescription = `Transfer ke Kas Cadangan${descriptionSuffix}`;
+    try {
+        // Construct description ensuring "Kas Cadangan" is present for filtering
+        const descriptionSuffix = tambahDeskripsi.trim() ? ` - ${tambahDeskripsi}` : '';
+        const finalDescription = `Transfer ke Kas Cadangan${descriptionSuffix}`;
 
-    const newExpenseEntry: FinanceEntry = {
-        id: Date.now(),
-        deskripsi: finalDescription,
-        tanggal: new Date().toISOString().split('T')[0],
-        kategori: 'Pengeluaran',
-        metode: 'Internal',
-        nominal: amount,
-    };
-    setFinanceHistory(prev => [...prev, newExpenseEntry]);
-    setKasCadangan(prev => prev + amount);
-    onKasActivity('add', amount);
-    
-    Swal.fire({ title: 'Berhasil', text: `Rp ${amount.toLocaleString('id-ID')} berhasil ditambahkan ke kas cadangan.`, icon: 'success', customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' } });
-    setTambahAmount('');
-    setTambahDeskripsi('');
+        const newExpenseEntry = {
+            deskripsi: finalDescription,
+            tanggal: new Date().toISOString().split('T')[0],
+            kategori: 'Pengeluaran' as const,
+            metode: 'Internal', // Using 'Internal' to distinguish from external transactions
+            nominal: amount,
+        };
+        await onAddUpdateFinanceEntry(newExpenseEntry); // Update finance history via prop
+        await onUpdateKasCadangan(kasCadangan + amount); // Update kas cadangan via prop
+        onKasActivity('add', amount);
+        
+        Swal.fire({ title: 'Berhasil', text: `Rp ${amount.toLocaleString('id-ID')} berhasil ditambahkan ke kas cadangan.`, icon: 'success', customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' } });
+        setTambahAmount('');
+        setTambahDeskripsi('');
+    } catch (error: any) {
+        console.error("Error adding to kas cadangan:", error.message);
+        Swal.fire({ title: 'Error', text: `Gagal menambahkan ke kas cadangan: ${error.message}`, icon: 'error', customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' } });
+    }
   };
 
-  const handleGunakanKas = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleGunakanKas = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const amount = Number(gunakanAmount);
     if (amount <= 0 || isNaN(amount)) {
@@ -82,20 +78,24 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
         return;
     }
 
-    const newIncomeEntry: FinanceEntry = {
-        id: Date.now(),
-        deskripsi: `Ambil dari Kas Cadangan`,
-        tanggal: new Date().toISOString().split('T')[0],
-        kategori: 'Pemasukan',
-        metode: 'Internal',
-        nominal: amount,
-    };
-    setFinanceHistory(prev => [...prev, newIncomeEntry]);
-    setKasCadangan(prev => prev - amount);
-    onKasActivity('use', amount);
-    
-    Swal.fire({ title: 'Berhasil', text: `Rp ${amount.toLocaleString('id-ID')} ditarik dari kas cadangan dan ditambahkan ke saldo akhir.`, icon: 'success', customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' } });
-    setGunakanAmount('');
+    try {
+        const newIncomeEntry = {
+            deskripsi: `Ambil dari Kas Cadangan`,
+            tanggal: new Date().toISOString().split('T')[0],
+            kategori: 'Pemasukan' as const,
+            metode: 'Internal', // Using 'Internal' to distinguish
+            nominal: amount,
+        };
+        await onAddUpdateFinanceEntry(newIncomeEntry); // Update finance history via prop
+        await onUpdateKasCadangan(kasCadangan - amount); // Update kas cadangan via prop
+        onKasActivity('use', amount);
+        
+        Swal.fire({ title: 'Berhasil', text: `Rp ${amount.toLocaleString('id-ID')} ditarik dari kas cadangan dan ditambahkan ke saldo akhir.`, icon: 'success', customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' } });
+        setGunakanAmount('');
+    } catch (error: any) {
+        console.error("Error using from kas cadangan:", error.message);
+        Swal.fire({ title: 'Error', text: `Gagal menarik dari kas cadangan: ${error.message}`, icon: 'error', customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' } });
+    }
   };
 
   const kasHistory = useMemo(() => {
