@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import DownloadIcon from './icons/DownloadIcon';
@@ -27,6 +26,21 @@ interface LaporanBulananPageProps {
   selectedMonth: string; // Add selectedMonth prop
 }
 
+// Helper function to determine if a finance entry should count towards main income
+const isMainIncome = (entry: FinanceEntry) => {
+  // 1. Must be a Pemasukan
+  if (entry.kategori !== 'Pemasukan') return false;
+
+  // 2. Exclude individual voucher sales (Penjualan Voucher - ...)
+  if (entry.deskripsi.toLowerCase().includes('penjualan voucher')) return false;
+
+  // 3. Include "Penarikan Saldo Voucher" explicitly
+  if (entry.deskripsi.toLowerCase().includes('penarikan saldo voucher')) return true;
+
+  // 4. Include all other Pemasukan types
+  return true;
+};
+
 const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, financeHistory, companyInfo, profitSharingData, setFinanceHistory, setProfitSharingData, kasCadangan, onProfitShareProcessed, selectedMonth }) => {
   const [members, setMembers] = useState<string[]>([]);
   const [newMemberName, setNewMemberName] = useState('');
@@ -42,10 +56,8 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         report[monthYearKey] = { pemasukan: 0, pengeluaran: 0 };
       }
 
-      // Exclude consolidated voucher sales from general income totals for reports
-      const shouldCountInPemasukan = entry.kategori === 'Pemasukan' && !(entry.deskripsi.toLowerCase().includes('voucher') && entry.isConsolidated === true);
-
-      if (shouldCountInPemasukan) {
+      // Use isMainIncome to filter for main income streams
+      if (isMainIncome(entry)) {
         report[monthYearKey].pemasukan += entry.nominal;
       } else if (entry.kategori === 'Pengeluaran') {
         report[monthYearKey].pengeluaran += entry.nominal;
@@ -79,7 +91,7 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
   
   const saldoAkhir = useMemo(() => {
     const totalPemasukan = financeHistory
-      .filter(e => e.kategori === 'Pemasukan' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true))
+      .filter(isMainIncome)
       .reduce((acc, e) => acc + e.nominal, 0);
 
     const totalPengeluaran = financeHistory
@@ -259,9 +271,9 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     }
 
     // --- NEW: Transaction Summary by Method ---
-    // Exclude consolidated voucher sales from general income totals for summary
-    const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true)).reduce((sum, e) => sum + e.nominal, 0);
-    const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true)).reduce((sum, e) => sum + e.nominal, 0);
+    // Use isMainIncome to filter for main income streams
+    const pemasukanTunai = financeHistory.filter(e => isMainIncome(e) && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
+    const pemasukanTransfer = financeHistory.filter(e => isMainIncome(e) && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
     const totalPemasukan = pemasukanTunai + pemasukanTransfer;
     
     const pengeluaranOperasional = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.deskripsi.toLowerCase().includes('bagi hasil') === false).reduce((sum, e) => sum + e.nominal, 0);

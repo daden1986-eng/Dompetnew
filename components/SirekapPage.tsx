@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
@@ -27,7 +26,20 @@ interface SirekapPageProps {
   onGenerateInvoice: (customer: Customer) => void;
 }
 
+// Helper function to determine if a finance entry should count towards main income
+const isMainIncome = (entry: FinanceEntry) => {
+  // 1. Must be a Pemasukan
+  if (entry.kategori !== 'Pemasukan') return false;
 
+  // 2. Exclude individual voucher sales (Penjualan Voucher - ...)
+  if (entry.deskripsi.toLowerCase().includes('penjualan voucher')) return false;
+
+  // 3. Include "Penarikan Saldo Voucher" explicitly
+  if (entry.deskripsi.toLowerCase().includes('penarikan saldo voucher')) return true;
+
+  // 4. Include all other Pemasukan types
+  return true;
+};
 
 const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustomers, financeHistory, setFinanceHistory, onPaymentSuccess, onNewCustomer, onNewFinanceEntry, companyInfo, onGenerateInvoice }) => {
   const [activeMenu, setActiveMenu] = useState<'daftar' | 'input' | 'keuangan' | 'riwayat'>('daftar'); // 'daftar', 'input', 'keuangan', or 'riwayat'
@@ -300,6 +312,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
         };
         setFinanceHistory(prevHistory => [...prevHistory, newPaymentEntry]);
 
+        // Fix: Explicitly cast the mapped object to Customer to resolve type compatibility issues
         const updatedCustomers = customers.map(c => {
           if (c.id === customer.id) {
             // Set next due date to 24th of the NEXT month after successful payment
@@ -311,7 +324,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
                 status: 'Lunas', 
                 tunggakan: 0, 
                 dueDate: nextDueDate.toISOString().split('T')[0] 
-            };
+            } as Customer; // Explicit cast
           }
           return c;
         });
@@ -382,6 +395,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
       },
     }).then((result: any) => {
       if (result.isConfirmed) {
+        // Fix: Explicitly cast the mapped object to Customer to resolve type compatibility issues
         const updatedCustomers = customers.map(c => {
             const newTunggakan = c.status === 'Belum Lunas' ? c.tunggakan + Number(c.harga) : c.tunggakan;
             
@@ -394,7 +408,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
                 status: 'Belum Lunas', // Type is correctly inferred from the literal string which matches the union type.
                 tunggakan: newTunggakan,
                 dueDate: currentMonthDueDate.toISOString().split('T')[0], // Set to current month's 24th
-            };
+            } as Customer; // Explicit cast
         });
         setCustomers(updatedCustomers);
         Swal.fire(
@@ -800,10 +814,8 @@ ${companyInfo.name}`
     let pengeluaranTransfer = 0;
     
     filteredFinanceHistory.forEach(entry => {
-        // Exclude consolidated voucher sales from general income totals for reports
-        const shouldCount = !(entry.kategori === 'Pemasukan' && entry.deskripsi.toLowerCase().includes('voucher') && entry.isConsolidated === true);
-
-        if (entry.kategori === 'Pemasukan' && shouldCount) {
+        // Use isMainIncome to filter for main income streams
+        if (isMainIncome(entry)) {
             totalPemasukan += entry.nominal;
             if (entry.metode === 'Tunai') {
                 pemasukanTunai += entry.nominal;

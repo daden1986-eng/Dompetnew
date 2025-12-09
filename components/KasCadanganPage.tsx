@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import { FinanceEntry } from '../App'; // Import FinanceEntry for type consistency

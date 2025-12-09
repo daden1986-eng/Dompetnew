@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
 import LaporanBulananPage, { ProfitShare } from './LaporanBulananPage'; // Import ProfitShare and LaporanBulananPage
@@ -26,6 +25,21 @@ interface DashboardPageProps {
   companyInfo: CompanyInfo;
   setCompanyInfo: React.Dispatch<React.SetStateAction<CompanyInfo>>;
 }
+
+// Helper function to determine if a finance entry should count towards main income
+const isMainIncome = (entry: FinanceEntry) => {
+  // 1. Must be a Pemasukan
+  if (entry.kategori !== 'Pemasukan') return false;
+
+  // 2. Exclude individual voucher sales (Penjualan Voucher - ...)
+  if (entry.deskripsi.toLowerCase().includes('penjualan voucher')) return false;
+
+  // 3. Include "Penarikan Saldo Voucher" explicitly
+  if (entry.deskripsi.toLowerCase().includes('penarikan saldo voucher')) return true;
+
+  // 4. Include all other Pemasukan types
+  return true;
+};
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
   const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher'>('dashboard');
@@ -119,7 +133,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     
   const saldoAkhir = useMemo(() => {
     const totalPemasukan = financeHistory
-      .filter(e => e.kategori === 'Pemasukan' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true))
+      .filter(isMainIncome)
       .reduce((acc, e) => acc + e.nominal, 0);
     const totalPengeluaran = financeHistory.filter(e => e.kategori === 'Pengeluaran').reduce((acc, e) => acc + e.nominal, 0);
     return totalPemasukan - totalPengeluaran;
@@ -128,8 +142,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
 
   // --- START NOTIFICATION LOGIC ---
   const generateBalanceSummary = (): string => {
-    const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true)).reduce((acc, e) => acc + e.nominal, 0);
-    const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true)).reduce((acc, e) => acc + e.nominal, 0);
+    const pemasukanTunai = financeHistory.filter(e => isMainIncome(e) && e.metode === 'Tunai').reduce((acc, e) => acc + e.nominal, 0);
+    const pemasukanTransfer = financeHistory.filter(e => isMainIncome(e) && e.metode === 'Transfer').reduce((acc, e) => acc + e.nominal, 0);
     const pengeluaranTunai = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Tunai').reduce((acc, e) => acc + e.nominal, 0);
     const pengeluaranTransfer = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Transfer').reduce((acc, e) => acc + e.nominal, 0);
     
@@ -650,7 +664,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     
     // Calculate summary data from filteredFinanceHistoryByMonth
     const pemasukanEntries = filteredFinanceHistoryByMonth
-      .filter(e => e.kategori === 'Pemasukan' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true));
+      .filter(isMainIncome);
 
     const pengeluaranEntries = filteredFinanceHistoryByMonth.filter(e => e.kategori === 'Pengeluaran');
 
@@ -675,7 +689,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     // This sum should still represent all historical voucher sales for the given month,
     // regardless of consolidation, for dashboard display.
     const totalVoucherRevenue = filteredFinanceHistoryByMonth
-      .filter(e => e.kategori === 'Pemasukan' && e.deskripsi.toLowerCase().includes('voucher'))
+      .filter(e => e.kategori === 'Pemasukan' && e.deskripsi.toLowerCase().includes('penjualan voucher'))
       .reduce((acc, e) => acc + e.nominal, 0);
 
     // New customer counts
@@ -688,11 +702,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     const getCategory = (entry: FinanceEntry): string => {
         const desc = entry.deskripsi.toLowerCase();
         if (entry.kategori === 'Pemasukan') {
-            if (desc.includes('voucher') && entry.isConsolidated !== true) return 'Pendapatan Voucher (Belum Ditarik)'; // Unconsolidated voucher sales
-            if (desc.includes('voucher') && entry.isConsolidated === true) return 'Pendapatan Voucher (Ditarik/Konsolidasi)'; // Consolidated voucher sales - should ideally not be counted in main income
-            if (desc.includes('penarikan saldo voucher')) return 'Penarikan Saldo Voucher'; // The consolidated entry itself
+            if (desc.includes('penarikan saldo voucher')) return 'Penarikan Saldo Voucher'; 
             if (desc.includes('langganan')) return 'Pendapatan Langganan';
             if (desc.includes('pemasangan')) return 'Pendapatan Pemasangan';
+            // Individual voucher sales are excluded from main income, so this category
+            // will only include other forms of income.
             return 'Pemasukan Lainnya';
         } else { // Pengeluaran
             if (desc.includes('router') || desc.includes('alat')) return 'Belanja Modal';
@@ -710,14 +724,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         const date = entry.tanggal;
         const category = getCategory(entry);
 
-        // Only count unconsolidated voucher sales OR the withdrawal entry, not both.
-        // And generally, exclude individual consolidated voucher entries from 'income' sums.
-        const shouldCountInIncomeTotal = entry.kategori === 'Pemasukan' && !(entry.deskripsi.toLowerCase().includes('voucher') && entry.isConsolidated === true);
-        const shouldCountInExpenseTotal = entry.kategori === 'Pengeluaran';
+        // Only count entries that are considered 'Main Income' for the chart's net effect
+        const shouldCountInChart = isMainIncome(entry) || entry.kategori === 'Pengeluaran';
 
-        if (shouldCountInIncomeTotal) {
+        if (isMainIncome(entry)) {
             allIncomeCategories.add(category);
-        } else if (shouldCountInExpenseTotal) {
+        } else if (entry.kategori === 'Pengeluaran') { // Only 'Pengeluaran' categories are considered expenses
             allExpenseCategories.add(category);
         }
 
@@ -729,8 +741,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             dailyDataCategorized[date][category] = 0;
         }
 
-        // Add to the category only if it should be counted for the chart's net effect
-        if (shouldCountInIncomeTotal || shouldCountInExpenseTotal) {
+        if (shouldCountInChart) {
             dailyDataCategorized[date][category] += entry.nominal;
         }
     });
@@ -767,8 +778,6 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     
     const categoryColors: { [key: string]: string } = {
         'Pendapatan Langganan': '#22c55e',
-        'Pendapatan Voucher (Belum Ditarik)': '#a855f7', // Purple for unconsolidated Voucher
-        'Pendapatan Voucher (Ditarik/Konsolidasi)': '#c084fc', // Lighter purple for consolidated voucher entries (might not be visible if filtered out from totals)
         'Penarikan Saldo Voucher': '#8b5cf6', // Darker purple for the actual withdrawal entry
         'Pendapatan Pemasangan': '#4ade80',
         'Pemasukan Lainnya': '#86efac',
@@ -828,7 +837,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
               </div>
               
               <div className="bg-indigo-500/10 p-4 rounded-lg">
-                  <p className="text-sm text-indigo-400 font-semibold">Pendapatan Voucher</p>
+                  <p className="text-sm text-indigo-400 font-semibold">Pendapatan Voucher (Bruto)</p>
                   <p className="text-xl sm:text-2xl font-bold text-white">
                     Rp {totalVoucherRevenue.toLocaleString('id-ID')}
                   </p>
