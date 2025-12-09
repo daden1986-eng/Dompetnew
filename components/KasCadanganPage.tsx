@@ -1,18 +1,10 @@
 
+
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
-import { CompanyInfo } from '../App'; // Import CompanyInfo for type consistency
+import { FinanceEntry } from '../App'; // Import FinanceEntry for type consistency
 
 declare const Swal: any;
-
-interface FinanceEntry {
-  id: number;
-  deskripsi: string;
-  tanggal: string;
-  kategori: string;
-  metode: string;
-  nominal: number;
-}
 
 interface KasCadanganPageProps {
   onBack: () => void;
@@ -60,6 +52,7 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
         kategori: 'Pengeluaran',
         metode: 'Internal',
         nominal: amount,
+        isConsolidated: false, // This is not a voucher entry, so default to false
     };
     setFinanceHistory(prev => [...prev, newExpenseEntry]);
     setKasCadangan(prev => prev + amount);
@@ -89,6 +82,7 @@ const KasCadanganPage: React.FC<KasCadanganPageProps> = ({
         kategori: 'Pemasukan',
         metode: 'Internal',
         nominal: amount,
+        isConsolidated: false, // This is not a voucher entry, so default to false
     };
     setFinanceHistory(prev => [...prev, newIncomeEntry]);
     setKasCadangan(prev => prev - amount);

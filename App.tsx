@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect } from 'react';
 import LoginPage from './components/LoginPage';
 import DashboardPage from './components/DashboardPage';
@@ -15,6 +16,29 @@ export interface CompanyInfo {
     nomorRekening: string;
     atasNama: string;
     stampLogo: string | null;
+}
+
+export interface FinanceEntry {
+  id: number;
+  deskripsi: string;
+  tanggal: string;
+  kategori: string;
+  metode: string;
+  nominal: number;
+  isConsolidated?: boolean; // New optional field for voucher revenue consolidation
+}
+
+// Moved from DashboardPage.tsx and SirekapPage.tsx to ensure a single source of truth.
+export interface Customer {
+  id: number;
+  nama: string;
+  noHp: string;
+  jenisLangganan: string;
+  alamat: string;
+  harga: string;
+  status: 'Lunas' | 'Belum Lunas';
+  tunggakan: number;
+  dueDate: string; // Added dueDate
 }
 
 // Utility function to check if localStorage is available and accessible

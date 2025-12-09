@@ -1,8 +1,9 @@
 
+
 import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import DownloadIcon from './icons/DownloadIcon';
-import { CompanyInfo } from '../App'; // Import CompanyInfo from App.tsx
+import { CompanyInfo, FinanceEntry } from '../App'; // Import CompanyInfo and FinanceEntry from App.tsx
 
 // Declare jsPDF from CDN. The autoTable plugin will extend the jsPDF instance.
 declare const jspdf: any;
@@ -12,15 +13,6 @@ declare const Swal: any;
 export interface ProfitShare {
   nama: string;
   jumlah: number;
-}
-
-interface FinanceEntry {
-  id: number;
-  deskripsi: string;
-  tanggal: string;
-  kategori: string;
-  metode: string;
-  nominal: number;
 }
 
 interface LaporanBulananPageProps {
@@ -50,7 +42,10 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
         report[monthYearKey] = { pemasukan: 0, pengeluaran: 0 };
       }
 
-      if (entry.kategori === 'Pemasukan') {
+      // Exclude consolidated voucher sales from general income totals for reports
+      const shouldCountInPemasukan = entry.kategori === 'Pemasukan' && !(entry.deskripsi.toLowerCase().includes('voucher') && entry.isConsolidated === true);
+
+      if (shouldCountInPemasukan) {
         report[monthYearKey].pemasukan += entry.nominal;
       } else if (entry.kategori === 'Pengeluaran') {
         report[monthYearKey].pengeluaran += entry.nominal;
@@ -84,7 +79,7 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
   
   const saldoAkhir = useMemo(() => {
     const totalPemasukan = financeHistory
-      .filter(e => e.kategori === 'Pemasukan')
+      .filter(e => e.kategori === 'Pemasukan' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true))
       .reduce((acc, e) => acc + e.nominal, 0);
 
     const totalPengeluaran = financeHistory
@@ -154,6 +149,7 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
                 kategori: 'Pengeluaran',
                 metode: 'Transfer',
                 nominal: saldoAkhir,
+                isConsolidated: false, // This is not a voucher entry, so default to false
             };
             setFinanceHistory(prev => [...prev, newExpenseEntry]);
             onProfitShareProcessed({ total: saldoAkhir, members: members.length });
@@ -263,8 +259,9 @@ const LaporanBulananPage: React.FC<LaporanBulananPageProps> = ({ onBack, finance
     }
 
     // --- NEW: Transaction Summary by Method ---
-    const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai').reduce((sum, e) => sum + e.nominal, 0);
-    const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer').reduce((sum, e) => sum + e.nominal, 0);
+    // Exclude consolidated voucher sales from general income totals for summary
+    const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true)).reduce((sum, e) => sum + e.nominal, 0);
+    const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true)).reduce((sum, e) => sum + e.nominal, 0);
     const totalPemasukan = pemasukanTunai + pemasukanTransfer;
     
     const pengeluaranOperasional = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.deskripsi.toLowerCase().includes('bagi hasil') === false).reduce((sum, e) => sum + e.nominal, 0);

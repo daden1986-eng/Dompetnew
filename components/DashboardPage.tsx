@@ -1,4 +1,5 @@
 
+
 import React, { useState, useEffect, useMemo } from 'react';
 import SirekapPage from './SirekapPage';
 import LaporanBulananPage, { ProfitShare } from './LaporanBulananPage'; // Import ProfitShare and LaporanBulananPage
@@ -8,7 +9,8 @@ import VoucherPage from './VoucherPage';
 import * as Recharts from 'recharts';
 import SettingsIcon from './icons/SettingsIcon';
 import TicketIcon from './icons/TicketIcon';
-import { CompanyInfo, isLocalStorageAvailable } from '../App'; // Import CompanyInfo and isLocalStorageAvailable from App.tsx
+// Updated import to include Customer from App.tsx as the single source of truth.
+import { CompanyInfo, isLocalStorageAvailable, FinanceEntry, Customer } from '../App'; 
 
 // Declare Swal to inform TypeScript about the global variable from the CDN script
 declare const Swal: any;
@@ -16,27 +18,7 @@ declare const Swal: any;
 // Destructure components from the Recharts namespace
 const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ComposedChart, Line } = Recharts;
 
-// Interfaces defined locally as they are heavily used here
-interface Customer {
-  id: number;
-  nama: string;
-  noHp: string;
-  jenisLangganan: string;
-  alamat: string;
-  harga: string;
-  status: 'Lunas' | 'Belum Lunas';
-  tunggakan: number;
-  dueDate: string; // Added dueDate
-}
-
-interface FinanceEntry {
-  id: number;
-  deskripsi: string;
-  tanggal: string;
-  kategori: string;
-  metode: string;
-  nominal: number;
-}
+// Removed local Customer interface definition. It is now imported from App.tsx.
 
 interface DashboardPageProps {
   onLogout: () => void;
@@ -74,7 +56,12 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
       if (!isLocalStorageAvailable()) return [];
       try {
           const saved = localStorage.getItem('sidompet_financeHistory');
-          return saved ? JSON.parse(saved) : [];
+          const parsed = saved ? JSON.parse(saved) : [];
+          // Ensure isConsolidated is set to false for older entries if missing
+          return parsed.map((entry: FinanceEntry) => ({
+              ...entry,
+              isConsolidated: entry.isConsolidated ?? false // Default to false if not present
+          }));
       } catch (e) {
           console.error("Gagal memuat riwayat keuangan dari penyimpanan:", e);
           return [];
@@ -131,7 +118,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
   }, [kasCadangan]);
     
   const saldoAkhir = useMemo(() => {
-    const totalPemasukan = financeHistory.filter(e => e.kategori === 'Pemasukan').reduce((acc, e) => acc + e.nominal, 0);
+    const totalPemasukan = financeHistory
+      .filter(e => e.kategori === 'Pemasukan' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true))
+      .reduce((acc, e) => acc + e.nominal, 0);
     const totalPengeluaran = financeHistory.filter(e => e.kategori === 'Pengeluaran').reduce((acc, e) => acc + e.nominal, 0);
     return totalPemasukan - totalPengeluaran;
   }, [financeHistory]);
@@ -139,8 +128,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
 
   // --- START NOTIFICATION LOGIC ---
   const generateBalanceSummary = (): string => {
-    const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai').reduce((acc, e) => acc + e.nominal, 0);
-    const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer').reduce((acc, e) => acc + e.nominal, 0);
+    const pemasukanTunai = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Tunai' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true)).reduce((acc, e) => acc + e.nominal, 0);
+    const pemasukanTransfer = financeHistory.filter(e => e.kategori === 'Pemasukan' && e.metode === 'Transfer' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true)).reduce((acc, e) => acc + e.nominal, 0);
     const pengeluaranTunai = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Tunai').reduce((acc, e) => acc + e.nominal, 0);
     const pengeluaranTransfer = financeHistory.filter(e => e.kategori === 'Pengeluaran' && e.metode === 'Transfer').reduce((acc, e) => acc + e.nominal, 0);
     
@@ -302,7 +291,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                         setCompanyInfo(parsedData.companyInfo);
                     }
                     setCustomers(parsedData.customers);
-                    setFinanceHistory(parsedData.financeHistory);
+                    // Ensure isConsolidated is set for restored entries
+                    setFinanceHistory(parsedData.financeHistory.map((entry: FinanceEntry) => ({
+                      ...entry,
+                      isConsolidated: entry.isConsolidated ?? false
+                    })));
                     if (parsedData.kasCadangan) {
                         setKasCadangan(parsedData.kasCadangan);
                     }
@@ -648,7 +641,7 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     if (financeHistory.length === 0 && customers.length === 0) { // Check both finance and customers
       const capitalizedUsername = username.charAt(0).toUpperCase() + username.slice(1);
       return (
-        <div className="text-center text-gray-400">
+        <div className="text-center text-gray-400 mt-8">
           <p className="text-3xl">Selamat Datang, {capitalizedUsername}!</p>
           <p className="mt-4 text-gray-300 text-lg">Belum ada data keuangan atau pelanggan untuk ditampilkan.</p>
         </div>
@@ -656,7 +649,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     }
     
     // Calculate summary data from filteredFinanceHistoryByMonth
-    const pemasukanEntries = filteredFinanceHistoryByMonth.filter(e => e.kategori === 'Pemasukan');
+    const pemasukanEntries = filteredFinanceHistoryByMonth
+      .filter(e => e.kategori === 'Pemasukan' && !(e.deskripsi.toLowerCase().includes('voucher') && e.isConsolidated === true));
+
     const pengeluaranEntries = filteredFinanceHistoryByMonth.filter(e => e.kategori === 'Pengeluaran');
 
     const totalPemasukan = pemasukanEntries.reduce((acc, e) => acc + e.nominal, 0);
@@ -677,6 +672,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
       .reduce((acc, e) => acc + e.nominal, 0);
     
     // Calculate voucher revenue specific
+    // This sum should still represent all historical voucher sales for the given month,
+    // regardless of consolidation, for dashboard display.
     const totalVoucherRevenue = filteredFinanceHistoryByMonth
       .filter(e => e.kategori === 'Pemasukan' && e.deskripsi.toLowerCase().includes('voucher'))
       .reduce((acc, e) => acc + e.nominal, 0);
@@ -691,7 +688,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     const getCategory = (entry: FinanceEntry): string => {
         const desc = entry.deskripsi.toLowerCase();
         if (entry.kategori === 'Pemasukan') {
-            if (desc.includes('voucher')) return 'Pendapatan Voucher'; // Explicit voucher category
+            if (desc.includes('voucher') && entry.isConsolidated !== true) return 'Pendapatan Voucher (Belum Ditarik)'; // Unconsolidated voucher sales
+            if (desc.includes('voucher') && entry.isConsolidated === true) return 'Pendapatan Voucher (Ditarik/Konsolidasi)'; // Consolidated voucher sales - should ideally not be counted in main income
+            if (desc.includes('penarikan saldo voucher')) return 'Penarikan Saldo Voucher'; // The consolidated entry itself
             if (desc.includes('langganan')) return 'Pendapatan Langganan';
             if (desc.includes('pemasangan')) return 'Pendapatan Pemasangan';
             return 'Pemasukan Lainnya';
@@ -711,9 +710,14 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         const date = entry.tanggal;
         const category = getCategory(entry);
 
-        if (entry.kategori === 'Pemasukan') {
+        // Only count unconsolidated voucher sales OR the withdrawal entry, not both.
+        // And generally, exclude individual consolidated voucher entries from 'income' sums.
+        const shouldCountInIncomeTotal = entry.kategori === 'Pemasukan' && !(entry.deskripsi.toLowerCase().includes('voucher') && entry.isConsolidated === true);
+        const shouldCountInExpenseTotal = entry.kategori === 'Pengeluaran';
+
+        if (shouldCountInIncomeTotal) {
             allIncomeCategories.add(category);
-        } else {
+        } else if (shouldCountInExpenseTotal) {
             allExpenseCategories.add(category);
         }
 
@@ -724,7 +728,11 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         if (!dailyDataCategorized[date][category]) {
             dailyDataCategorized[date][category] = 0;
         }
-        dailyDataCategorized[date][category] += entry.nominal;
+
+        // Add to the category only if it should be counted for the chart's net effect
+        if (shouldCountInIncomeTotal || shouldCountInExpenseTotal) {
+            dailyDataCategorized[date][category] += entry.nominal;
+        }
     });
 
     let cumulativeBalance = 0;
@@ -759,7 +767,9 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
     
     const categoryColors: { [key: string]: string } = {
         'Pendapatan Langganan': '#22c55e',
-        'Pendapatan Voucher': '#a855f7', // Purple for Voucher
+        'Pendapatan Voucher (Belum Ditarik)': '#a855f7', // Purple for unconsolidated Voucher
+        'Pendapatan Voucher (Ditarik/Konsolidasi)': '#c084fc', // Lighter purple for consolidated voucher entries (might not be visible if filtered out from totals)
+        'Penarikan Saldo Voucher': '#8b5cf6', // Darker purple for the actual withdrawal entry
         'Pendapatan Pemasangan': '#4ade80',
         'Pemasukan Lainnya': '#86efac',
         'Belanja Modal': '#ef4444',
@@ -983,6 +993,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             financeHistory={financeHistory}
             setFinanceHistory={setFinanceHistory}
             onNewFinanceEntry={handleNewFinanceEntryNotification}
+            onVoucherWithdrawal={handleNewFinanceEntryNotification} // Pass notification handler for withdrawal
+            currentSelectedMonth={selectedMonth} // Pass the selected month for voucher filtering
           />
         ) : (
           <>

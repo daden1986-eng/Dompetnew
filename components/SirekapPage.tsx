@@ -1,35 +1,18 @@
 
+
 import React, { useState } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
 import DownloadIcon from './icons/DownloadIcon';
 import DocumentIcon from './icons/DocumentIcon';
-import { CompanyInfo } from '../App'; // Import CompanyInfo from App.tsx
+// Updated import to include Customer from App.tsx as the single source of truth.
+import { CompanyInfo, FinanceEntry, Customer } from '../App'; 
 
 // Declare Swal to inform TypeScript about the global variable from the CDN script
 declare const Swal: any;
 declare const jspdf: any;
 
-interface Customer {
-  id: number;
-  nama: string;
-  noHp: string;
-  jenisLangganan: string;
-  alamat: string;
-  harga: string;
-  status: 'Lunas' | 'Belum Lunas';
-  tunggakan: number;
-  dueDate: string; // Added dueDate: YYYY-MM-DD
-}
-
-interface FinanceEntry {
-  id: number;
-  deskripsi: string;
-  tanggal: string;
-  kategori: string;
-  metode: string;
-  nominal: number;
-}
+// Removed local Customer interface definition. It is now imported from App.tsx.
 
 interface SirekapPageProps {
   onBack: () => void;
@@ -47,7 +30,7 @@ interface SirekapPageProps {
 
 
 const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustomers, financeHistory, setFinanceHistory, onPaymentSuccess, onNewCustomer, onNewFinanceEntry, companyInfo, onGenerateInvoice }) => {
-  const [activeMenu, setActiveMenu] = useState('daftar'); // 'daftar', 'input', 'keuangan', or 'riwayat'
+  const [activeMenu, setActiveMenu] = useState<'daftar' | 'input' | 'keuangan' | 'riwayat'>('daftar'); // 'daftar', 'input', 'keuangan', or 'riwayat'
   
   // State for the new customer form
   const [nama, setNama] = useState('');
@@ -195,6 +178,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
             kategori,
             metode,
             nominal: Number(nominal),
+            isConsolidated: false, // Default new entries to not consolidated
         };
         setFinanceHistory(prevHistory => [...prevHistory, newFinanceEntry]);
         onNewFinanceEntry(newFinanceEntry);
@@ -312,6 +296,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
           kategori: 'Pemasukan',
           metode: metodePembayaran,
           nominal: totalTagihan,
+          isConsolidated: false, // Default new entries to not consolidated
         };
         setFinanceHistory(prevHistory => [...prevHistory, newPaymentEntry]);
 
@@ -406,7 +391,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
 
             return {
                 ...c,
-                status: 'Belum Lunas' as const,
+                status: 'Belum Lunas', // Type is correctly inferred from the literal string which matches the union type.
                 tunggakan: newTunggakan,
                 dueDate: currentMonthDueDate.toISOString().split('T')[0], // Set to current month's 24th
             };
@@ -815,7 +800,10 @@ ${companyInfo.name}`
     let pengeluaranTransfer = 0;
     
     filteredFinanceHistory.forEach(entry => {
-        if (entry.kategori === 'Pemasukan') {
+        // Exclude consolidated voucher sales from general income totals for reports
+        const shouldCount = !(entry.kategori === 'Pemasukan' && entry.deskripsi.toLowerCase().includes('voucher') && entry.isConsolidated === true);
+
+        if (entry.kategori === 'Pemasukan' && shouldCount) {
             totalPemasukan += entry.nominal;
             if (entry.metode === 'Tunai') {
                 pemasukanTunai += entry.nominal;
