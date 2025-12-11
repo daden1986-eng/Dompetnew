@@ -14,6 +14,8 @@ interface NetworkNode {
   name: string;
   ip: string;
   status: 'up' | 'down' | 'warning';
+  lat?: string; // Added Latitude
+  lng?: string; // Added Longitude
 }
 
 interface NetworkLink {
@@ -248,6 +250,8 @@ const TopologyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             name: `New ${type.charAt(0).toUpperCase() + type.slice(1)}`,
             ip: '192.168.1.1',
             status: 'up',
+            lat: '',
+            lng: ''
           };
 
           setNodes([...nodes, newNode]);
@@ -391,6 +395,36 @@ const TopologyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   const getNodeCenter = (nodeId: string) => {
       const node = nodes.find(n => n.id === nodeId);
       return node ? { x: node.x + 24, y: node.y + 24 } : { x: 0, y: 0 };
+  };
+
+  const getMyLocation = () => {
+    if (!navigator.geolocation) {
+        Swal.fire('Error', 'Geolocation is not supported by your browser', 'error');
+        return;
+    }
+    
+    if (selectedNodeId) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setNodes(nodes.map(n => n.id === selectedNodeId ? {
+                    ...n, 
+                    lat: position.coords.latitude.toString(),
+                    lng: position.coords.longitude.toString()
+                } : n));
+                Swal.fire({
+                    title: 'Location Updated',
+                    text: 'Device coordinates updated to your current location.',
+                    icon: 'success',
+                    timer: 1500,
+                    showConfirmButton: false,
+                    customClass: { popup: '!bg-gray-800 !text-white', title: '!text-white' }
+                });
+            },
+            () => {
+                Swal.fire('Error', 'Unable to retrieve your location', 'error');
+            }
+        );
+    }
   };
 
   const selectedNodeData = nodes.find(n => n.id === selectedNodeId);
@@ -631,6 +665,15 @@ const TopologyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                                     <div className={`absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-gray-900 
                                         ${node.status === 'up' ? 'bg-green-500' : node.status === 'down' ? 'bg-red-500' : 'bg-yellow-500'}
                                     `}></div>
+
+                                    {/* Location Pin Indicator */}
+                                    {node.lat && node.lng && (
+                                        <div className="absolute -bottom-1 -right-1 text-red-400 drop-shadow-md" title="Has Geolocation">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                                                <path fillRule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                                            </svg>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="absolute top-14 left-1/2 -translate-x-1/2 flex flex-col items-center whitespace-nowrap z-40">
@@ -710,6 +753,57 @@ const TopologyPage: React.FC<{ onBack: () => void }> = ({ onBack }) => {
                                 >
                                     {Object.keys(Icons).map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
+                            </div>
+
+                            {/* GEOLOCATION SECTION */}
+                            <div className="pt-2 border-t border-gray-700">
+                                <div className="flex justify-between items-center mb-1.5">
+                                    <label className="block text-xs font-semibold text-gray-400 uppercase">Geolocation Map</label>
+                                    <button 
+                                        onClick={getMyLocation}
+                                        className="text-[10px] bg-sky-600/20 text-sky-400 px-2 py-0.5 rounded hover:bg-sky-600/30 transition-colors"
+                                        title="Use Device GPS"
+                                    >
+                                        Get My Location
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <div>
+                                        <label className="block text-[10px] text-gray-500 mb-1">Latitude</label>
+                                        <input 
+                                            type="text" 
+                                            value={selectedNodeData.lat || ''}
+                                            onChange={(e) => setNodes(nodes.map(n => n.id === selectedNodeId ? { ...n, lat: e.target.value } : n))}
+                                            placeholder="-6.200000"
+                                            className="w-full bg-gray-900/50 border border-gray-600 rounded-md px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] text-gray-500 mb-1">Longitude</label>
+                                        <input 
+                                            type="text" 
+                                            value={selectedNodeData.lng || ''}
+                                            onChange={(e) => setNodes(nodes.map(n => n.id === selectedNodeId ? { ...n, lng: e.target.value } : n))}
+                                            placeholder="106.816666"
+                                            className="w-full bg-gray-900/50 border border-gray-600 rounded-md px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                        />
+                                    </div>
+                                </div>
+                                {selectedNodeData.lat && selectedNodeData.lng ? (
+                                    <a 
+                                        href={`https://www.google.com/maps/search/?api=1&query=${selectedNodeData.lat},${selectedNodeData.lng}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="flex items-center justify-center gap-1 w-full bg-green-600 hover:bg-green-500 text-white text-xs py-1.5 rounded transition-colors"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                            <path fillRule="evenodd" d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                                        </svg>
+                                        Open Google Maps
+                                    </a>
+                                ) : (
+                                    <p className="text-[10px] text-gray-500 text-center italic">Coordinates not set</p>
+                                )}
                             </div>
                         </>
                     )}
