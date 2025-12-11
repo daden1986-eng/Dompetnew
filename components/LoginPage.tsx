@@ -1,5 +1,4 @@
 
-
 import React, { useState } from 'react';
 import UserIcon from './icons/UserIcon';
 import LockIcon from './icons/LockIcon';
@@ -20,12 +19,29 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, companyInfo }) =>
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (username === 'admin' && password === 'damar') {
+
+    // Password complexity validation
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+
+    if (password.length < minLength || !hasUpperCase || !hasNumber) {
+      setError('Kata sandi harus minimal 8 karakter, mengandung huruf besar dan angka.');
+      return;
+    }
+
+    // Updated hardcoded password to match complexity requirements
+    if (username === 'admin' && password === 'Damar123') {
       setError('');
       onLoginSuccess(username);
     } else {
       setError('Username atau kata sandi salah.');
     }
+  };
+
+  const handleForgotPassword = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    setError('Silakan hubungi administrator untuk mereset kata sandi Anda.');
   };
 
   return (
@@ -98,7 +114,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLoginSuccess, companyInfo }) =>
               <span className="ml-2 text-sm text-gray-300">Ingat saya</span>
             </label>
             <div className="text-sm">
-              <a href="#" className="font-medium text-blue-400 hover:text-blue-300">
+              <a 
+                href="#" 
+                onClick={handleForgotPassword}
+                className="font-medium text-blue-400 hover:text-blue-300"
+              >
                 Lupa kata sandi?
               </a>
             </div>

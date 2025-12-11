@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import WhatsappIcon from './icons/WhatsappIcon';
 import DownloadIcon from './icons/DownloadIcon';
@@ -42,7 +42,7 @@ const isMainIncome = (entry: FinanceEntry) => {
 };
 
 const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustomers, financeHistory, setFinanceHistory, onPaymentSuccess, onNewCustomer, onNewFinanceEntry, companyInfo, onGenerateInvoice }) => {
-  const [activeMenu, setActiveMenu] = useState<'daftar' | 'input' | 'keuangan' | 'riwayat'>('daftar'); // 'daftar', 'input', 'keuangan', or 'riwayat'
+  const [activeMenu, setActiveMenu] = useState<'daftar' | 'input' | 'keuangan' | 'riwayat'>('daftar'); 
   
   // State for the new customer form
   const [nama, setNama] = useState('');
@@ -79,6 +79,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
   // State for finance history filtering
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterMonth, setFilterMonth] = useState('all'); // New state for month filtering
   const [financeSearchTerm, setFinanceSearchTerm] = useState('');
   const [isHistoryVisible, setIsHistoryVisible] = useState(true);
 
@@ -217,7 +218,7 @@ const SirekapPage: React.FC<SirekapPageProps> = ({ onBack, customers, setCustome
       text: "Anda tidak akan dapat mengembalikan ini!",
       icon: 'warning',
       showCancelButton: true,
-      confirmButtonColor: '#3085d6',
+      confirmButtonColor: '#d33',
       cancelButtonColor: '#d33',
       confirmButtonText: 'Ya, hapus!',
       cancelButtonText: 'Batal'
@@ -595,22 +596,72 @@ ${companyInfo.name}`
     }
   };
 
-  const filteredFinanceHistory = financeHistory.filter(entry => {
-    const entryDate = new Date(entry.tanggal);
-    const startDate = filterStartDate ? new Date(filterStartDate) : null;
-    const endDate = filterEndDate ? new Date(filterEndDate) : null;
+  // Extract available months from finance history
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    financeHistory.forEach(entry => {
+      const date = new Date(entry.tanggal);
+      months.add(date.toLocaleString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' }));
+    });
+    return ['all', ...Array.from(months).sort((a,b) => { // Sort chronologically
+      const [monthA, yearA] = a.split(' ');
+      const [monthB, yearB] = b.split(' ');
+      const dateA = new Date(Date.parse(`${monthA} 1, ${yearA}`));
+      const dateB = new Date(Date.parse(`${monthB} 1, ${yearB}`));
+      return dateA.getTime() - dateB.getTime();
+    }).reverse()]; // Newest first
+  }, [financeHistory]);
 
-    if(startDate) startDate.setUTCHours(0,0,0,0);
-    if(endDate) endDate.setUTCHours(23,59,59,999);
-    
-    const dateMatch = (!startDate || entryDate >= startDate) && (!endDate || entryDate <= endDate);
+  const filteredFinanceHistory = useMemo(() => {
+    return financeHistory.filter(entry => {
+      const entryDate = new Date(entry.tanggal);
+      const entryMonth = entryDate.toLocaleString('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-    const searchMatch = !financeSearchTerm ||
-        entry.deskripsi.toLowerCase().includes(financeSearchTerm.toLowerCase()) ||
-        String(entry.nominal).includes(financeSearchTerm);
-        
-    return dateMatch && searchMatch;
-  });
+      // 1. Month Filter
+      if (filterMonth !== 'all' && entryMonth !== filterMonth) {
+        return false;
+      }
+
+      // 2. Date Range Filter (Only applies if Month filter is 'all')
+      if (filterMonth === 'all') {
+        const startDate = filterStartDate ? new Date(filterStartDate) : null;
+        const endDate = filterEndDate ? new Date(filterEndDate) : null;
+
+        if (startDate) startDate.setUTCHours(0, 0, 0, 0);
+        if (endDate) endDate.setUTCHours(23, 59, 59, 999);
+
+        const dateMatch = (!startDate || entryDate >= startDate) && (!endDate || entryDate <= endDate);
+        if (!dateMatch) return false;
+      }
+
+      // 3. Search Filter
+      const searchMatch = !financeSearchTerm ||
+          entry.deskripsi.toLowerCase().includes(financeSearchTerm.toLowerCase()) ||
+          String(entry.nominal).includes(financeSearchTerm);
+          
+      return searchMatch;
+    });
+  }, [financeHistory, filterMonth, filterStartDate, filterEndDate, financeSearchTerm]);
+
+  const handleMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilterMonth(e.target.value);
+    // If a specific month is selected, clear the manual date filters to avoid confusion
+    if (e.target.value !== 'all') {
+        setFilterStartDate('');
+        setFilterEndDate('');
+    }
+  };
+
+  const handleDateFilterChange = (type: 'start' | 'end', value: string) => {
+      if (type === 'start') setFilterStartDate(value);
+      if (type === 'end') setFilterEndDate(value);
+      
+      // If user sets a custom date, reset month filter to 'all' (custom)
+      if (value) {
+          setFilterMonth('all');
+      }
+  };
+
 
   const renderCustomerList = () => {
     if (customers.length === 0) {
@@ -838,6 +889,22 @@ ${companyInfo.name}`
       <>
         {/* Filter Section */}
         <div className="flex flex-col sm:flex-row flex-wrap gap-4 mb-6 p-4 bg-white/5 rounded-lg items-end">
+             {/* Month Filter */}
+            <div className="flex-grow w-full sm:w-auto" style={{ minWidth: '150px' }}>
+                <label htmlFor="filterMonth" className="block text-sm font-medium text-gray-400 mb-1">Pilih Bulan</label>
+                <select
+                    id="filterMonth"
+                    value={filterMonth}
+                    onChange={handleMonthChange}
+                    className="w-full px-4 py-2 rounded-lg bg-gray-700/50 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                    <option value="all">Semua Waktu</option>
+                    {availableMonths.filter(m => m !== 'all').map(month => (
+                        <option key={month} value={month}>{month}</option>
+                    ))}
+                </select>
+            </div>
+
             <div className="flex-grow w-full sm:w-auto" style={{ minWidth: '200px' }}>
                 <label htmlFor="financeSearch" className="block text-sm font-medium text-gray-400 mb-1">Cari Transaksi</label>
                 <input
@@ -849,14 +916,16 @@ ${companyInfo.name}`
                   className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 placeholder-gray-400"
                 />
             </div>
+            
             <div className="flex-grow w-full sm:w-auto">
                 <label htmlFor="filterStartDate" className="block text-sm font-medium text-gray-400 mb-1">Dari Tanggal</label>
                 <input
                   type="date"
                   id="filterStartDate"
                   value={filterStartDate}
-                  onChange={(e) => setFilterStartDate(e.target.value)}
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                  onChange={(e) => handleDateFilterChange('start', e.target.value)}
+                  className={`w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 ${filterMonth !== 'all' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={filterMonth !== 'all'}
                 />
             </div>
             <div className="flex-grow w-full sm:w-auto">
@@ -865,8 +934,9 @@ ${companyInfo.name}`
                   type="date"
                   id="filterEndDate"
                   value={filterEndDate}
-                  onChange={(e) => setFilterEndDate(e.target.value)}
-                  className="w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300"
+                  onChange={(e) => handleDateFilterChange('end', e.target.value)}
+                  className={`w-full pl-4 pr-3 py-2 text-white bg-white/10 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition duration-300 ${filterMonth !== 'all' ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  disabled={filterMonth !== 'all'}
                 />
             </div>
             <div className="w-full sm:w-auto">
@@ -900,7 +970,7 @@ ${companyInfo.name}`
                     </div>
                 </div>
                 <div className="bg-sky-500/10 p-4 rounded-lg">
-                    <p className="text-sm text-sky-400 font-semibold">Saldo (sesuai filter)</p>
+                    <p className="text-sm text-sky-400 font-semibold">Saldo ({filterMonth === 'all' ? 'Semua / Custom' : filterMonth})</p>
                     <p className={`text-xl font-bold ${saldoKeseluruhan >= 0 ? 'text-white' : 'text-red-400'}`}>
                         Rp {saldoKeseluruhan.toLocaleString('id-ID')}
                     </p>

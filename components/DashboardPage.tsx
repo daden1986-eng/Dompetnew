@@ -5,9 +5,11 @@ import LaporanBulananPage, { ProfitShare } from './LaporanBulananPage'; // Impor
 import InvoicePage, { InvoiceInitialData } from './InvoicePage';
 import KasCadanganPage from './KasCadanganPage';
 import VoucherPage from './VoucherPage';
+import TopologyPage from './TopologyPage'; // Import TopologyPage
 import * as Recharts from 'recharts';
 import SettingsIcon from './icons/SettingsIcon';
 import TicketIcon from './icons/TicketIcon';
+import NetworkIcon from './icons/NetworkIcon'; // Import NetworkIcon
 // Updated import to include Customer from App.tsx as the single source of truth.
 import { CompanyInfo, isLocalStorageAvailable, FinanceEntry, Customer } from '../App'; 
 
@@ -42,7 +44,7 @@ const isMainIncome = (entry: FinanceEntry) => {
 };
 
 const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, companyInfo, setCompanyInfo }) => {
-  const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher'>('dashboard');
+  const [activePage, setActivePage] = useState<'dashboard' | 'sirekap' | 'laporan' | 'invoice' | 'kasCadangan' | 'voucher' | 'topology'>('dashboard');
   const [invoiceInitialData, setInvoiceInitialData] = useState<InvoiceInitialData | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string>('all'); // State for month filter
 
@@ -617,6 +619,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
         return 'Kas Cadangan';
       case 'voucher':
         return 'Pendapatan Voucher';
+      case 'topology':
+        return 'Topologi Jaringan';
       default:
         return 'Dasbor';
     }
@@ -1005,6 +1009,8 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
             onVoucherWithdrawal={handleNewFinanceEntryNotification} // Pass notification handler for withdrawal
             currentSelectedMonth={selectedMonth} // Pass the selected month for voucher filtering
           />
+        ) : activePage === 'topology' ? (
+          <TopologyPage onBack={handleBack} />
         ) : (
           <>
             {/* Menu Section */}
@@ -1054,6 +1060,15 @@ const DashboardPage: React.FC<DashboardPageProps> = ({ onLogout, username, compa
                       className="text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 border-b-2 border-transparent hover:border-sky-400 whitespace-nowrap flex items-center gap-1">
                       <TicketIcon className="w-4 h-4" />
                       Pendapatan Voucher
+                    </a>
+                  </li>
+                  <li>
+                    <a 
+                      href="#" 
+                      onClick={(e) => { e.preventDefault(); setActivePage('topology'); }}
+                      className="text-base sm:text-lg text-white font-medium hover:text-sky-300 transition-colors duration-300 pb-1 border-b-2 border-transparent hover:border-sky-400 whitespace-nowrap flex items-center gap-1">
+                      <NetworkIcon className="w-4 h-4" />
+                      Topologi Jaringan
                     </a>
                   </li>
                 </ul>
